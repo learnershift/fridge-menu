@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <application android:allowBackup="false" android:label="Fridge Menu" android:theme="@style/AppTheme" android:usesCleartextTraffic="false">
+  <application android:allowBackup="false" android:icon="@drawable/ic_launcher" android:label="Fridge Menu" android:theme="@style/AppTheme" android:usesCleartextTraffic="false">
     <activity android:name=".MainActivity" android:exported="true">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />

@@ -122,6 +122,7 @@ test("package has no dependency or install surface", async () => {
 test("release path is reproducible, unsigned, privacy-preserving, and owner-safe", async () => {
   const pkg = JSON.parse(await read("package.json"));
   const androidBuild = await read("android/app/build.gradle.kts");
+  const androidRootBuild = await read("android/build.gradle.kts");
   const packaging = await read("scripts/android-package.mjs");
   const manifest = await read("scripts/release-manifest.mjs");
   const capture = await read("scripts/capture-store-assets.mjs");
@@ -137,6 +138,7 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   assert.ok(pkg.scripts["verify:release"].includes("npm run build"));
   assert.match(androidBuild, /signingConfig\s*=\s*null/);
   assert.match(androidBuild, /applicationId\s*=\s*"com.learnershift.fridgemenu"/);
+  assert.match(androidRootBuild, /com\.android\.application"\) version "8\.6\.1"/);
   assert.match(packaging, /FRIDGE_MENU_ANDROID_SDK/);
   assert.match(packaging, /unsigned.*\.aab/i);
   assert.match(packaging, /do not create or import signing keys/i);
@@ -150,6 +152,25 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   assert.match(listing, /Short description/);
   assert.match(dataSafety, /No data collected or shared/);
   assert.match(handoff, /Google Play Console/);
+});
+
+test("Android release shell has a launcher icon and remains offline with no permissions", async () => {
+  const manifest = await read("android/app/src/main/AndroidManifest.xml");
+  const activity = await read("android/app/src/main/java/com/learnershift/fridgemenu/MainActivity.java");
+  const icon = await read("android/app/src/main/res/drawable/ic_launcher.xml");
+
+  assert.match(manifest, /android:icon="@drawable\/ic_launcher"/);
+  assert.doesNotMatch(manifest, /uses-permission/);
+  assert.match(activity, /file:\/\/\/android_asset\/pwa\/index\.html/);
+  assert.doesNotMatch(activity, /https?:\/\//i);
+  assert.match(icon, /<vector/);
+});
+
+test("Play upload icon is a 512px PNG derived from the canonical app artwork", async () => {
+  const icon = await readFile(resolve(root, "release/store-assets/fridge-menu-icon-512.png"));
+  assert.deepEqual([...icon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(icon.readUInt32BE(16), 512);
+  assert.equal(icon.readUInt32BE(20), 512);
 });
 
 test("source tree and build output stay inside the release allowlists", async () => {
