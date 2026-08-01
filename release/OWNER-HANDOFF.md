@@ -10,7 +10,7 @@
 
 - Register or select the Play Console app, complete app access, ads, target audience, content rating, countries, and contact fields.
 - Publish `privacy-policy.md` at a stable public HTTPS URL and enter it in Google Play Console.
-- Provide a 512 x 512 PNG app icon, 1024 x 500 PNG feature graphic, and at least two device screenshots captured from the final app. Run `npm start` and then `node scripts/capture-store-assets.mjs`; set `FRIDGE_MENU_CHROME_BIN` or `FRIDGE_MENU_CAPTURE_URL` if needed. This captures a reproducible 1080 x 1920 browser image but does not replace final physical-device captures.
+- The repository now supplies `release/store-assets/fridge-menu-icon-512.png` and `release/store-assets/fridge-menu-feature-graphic-1024x500.png`; regenerate the feature graphic with `npm run store-assets`. Provide at least two device screenshots captured from the final app. Run `npm start` and then `npm run store-screenshot`; set `FRIDGE_MENU_CHROME_BIN` or `FRIDGE_MENU_CAPTURE_URL` if needed. This captures a reproducible 1080 x 1920 browser image but does not replace final physical-device captures.
 - Upload the unsigned AAB only through the owner-controlled Play Console signing flow, then verify the generated test-track artifact on a physical device.
 
 ## Release QA record

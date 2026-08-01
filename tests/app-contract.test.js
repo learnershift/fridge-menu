@@ -116,7 +116,7 @@ test("package has no dependency or install surface", async () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
-  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "build", "release:manifest", "start", "test", "verify:release"]);
+  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "build", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:release"]);
 });
 
 test("release path is reproducible, unsigned, privacy-preserving, and owner-safe", async () => {
@@ -125,6 +125,7 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   const androidRootBuild = await read("android/build.gradle.kts");
   const packaging = await read("scripts/android-package.mjs");
   const manifest = await read("scripts/release-manifest.mjs");
+  const storeAssets = await read("scripts/generate-store-assets.mjs");
   const capture = await read("scripts/capture-store-assets.mjs");
   const workflow = await read(".github/workflows/release-readiness.yml");
   const privacy = await read("release/privacy-policy.md");
@@ -134,6 +135,8 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
 
   assert.equal(pkg.scripts["android:aab"], "node scripts/android-package.mjs");
   assert.equal(pkg.scripts["release:manifest"], "node scripts/release-manifest.mjs");
+  assert.equal(pkg.scripts["store-assets"], "node scripts/generate-store-assets.mjs");
+  assert.equal(pkg.scripts["store-screenshot"], "node scripts/capture-store-assets.mjs");
   assert.ok(pkg.scripts["verify:release"].includes("npm test"));
   assert.ok(pkg.scripts["verify:release"].includes("npm run build"));
   assert.match(androidBuild, /signingConfig\s*=\s*null/);
@@ -143,6 +146,10 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   assert.match(packaging, /unsigned.*\.aab/i);
   assert.match(packaging, /do not create or import signing keys/i);
   assert.match(manifest, /sha256/i);
+  assert.match(manifest, /release\/store-assets\/fridge-menu-icon-512\.png/);
+  assert.match(manifest, /release\/store-assets\/fridge-menu-feature-graphic-1024x500\.png/);
+  assert.match(storeAssets, /deflateSync/);
+  assert.match(storeAssets, /1024/);
   assert.match(capture, /--headless/);
   assert.match(capture, /FRIDGE_MENU_CHROME_BIN/);
   assert.match(workflow, /npm test/);
@@ -171,6 +178,13 @@ test("Play upload icon is a 512px PNG derived from the canonical app artwork", a
   assert.deepEqual([...icon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.equal(icon.readUInt32BE(16), 512);
   assert.equal(icon.readUInt32BE(20), 512);
+});
+
+test("Play feature graphic is a deterministic 1024 by 500 PNG", async () => {
+  const graphic = await readFile(resolve(root, "release/store-assets/fridge-menu-feature-graphic-1024x500.png"));
+  assert.deepEqual([...graphic.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(graphic.readUInt32BE(16), 1024);
+  assert.equal(graphic.readUInt32BE(20), 500);
 });
 
 test("source tree and build output stay inside the release allowlists", async () => {

@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "release/artifacts/release-manifest.json");
-const files = ["dist/ad-boundary.js", "dist/app.js", "dist/icon.svg", "dist/index.html", "dist/manifest.webmanifest", "dist/meal-engine.js", "dist/service-worker.js", "dist/styles.css"];
+const files = ["dist/ad-boundary.js", "dist/app.js", "dist/icon.svg", "dist/index.html", "dist/manifest.webmanifest", "dist/meal-engine.js", "dist/service-worker.js", "dist/styles.css", "release/store-assets/fridge-menu-icon-512.png", "release/store-assets/fridge-menu-feature-graphic-1024x500.png"];
 const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
 if (revision.status !== 0) throw new Error("Cannot bind release manifest: git revision unavailable.");
 const digest = (value) => createHash("sha256").update(value).digest("hex");
