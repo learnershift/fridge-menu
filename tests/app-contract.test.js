@@ -116,13 +116,46 @@ test("package has no dependency or install surface", async () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
-  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["build", "start", "test"]);
+  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "build", "release:manifest", "start", "test", "verify:release"]);
+});
+
+test("release path is reproducible, unsigned, privacy-preserving, and owner-safe", async () => {
+  const pkg = JSON.parse(await read("package.json"));
+  const androidBuild = await read("android/app/build.gradle.kts");
+  const packaging = await read("scripts/android-package.mjs");
+  const manifest = await read("scripts/release-manifest.mjs");
+  const capture = await read("scripts/capture-store-assets.mjs");
+  const workflow = await read(".github/workflows/release-readiness.yml");
+  const privacy = await read("release/privacy-policy.md");
+  const listing = await read("release/play-listing.md");
+  const dataSafety = await read("release/data-safety.md");
+  const handoff = await read("release/OWNER-HANDOFF.md");
+
+  assert.equal(pkg.scripts["android:aab"], "node scripts/android-package.mjs");
+  assert.equal(pkg.scripts["release:manifest"], "node scripts/release-manifest.mjs");
+  assert.ok(pkg.scripts["verify:release"].includes("npm test"));
+  assert.ok(pkg.scripts["verify:release"].includes("npm run build"));
+  assert.match(androidBuild, /signingConfig\s*=\s*null/);
+  assert.match(androidBuild, /applicationId\s*=\s*"com.learnershift.fridgemenu"/);
+  assert.match(packaging, /FRIDGE_MENU_ANDROID_SDK/);
+  assert.match(packaging, /unsigned.*\.aab/i);
+  assert.match(packaging, /do not create or import signing keys/i);
+  assert.match(manifest, /sha256/i);
+  assert.match(capture, /--headless/);
+  assert.match(capture, /FRIDGE_MENU_CHROME_BIN/);
+  assert.match(workflow, /npm test/);
+  assert.match(workflow, /npm run build/);
+  assert.match(workflow, /release:manifest/);
+  assert.match(privacy, /no account, analytics, advertising SDK, tracking, or remote API/i);
+  assert.match(listing, /Short description/);
+  assert.match(dataSafety, /No data collected or shared/);
+  assert.match(handoff, /Google Play Console/);
 });
 
 test("source tree and build output stay inside the release allowlists", async () => {
   const top = (await readdir(root)).sort();
   assert.deepEqual(top.filter((name) => ![".git", "dist"].includes(name)), [
-    ".gitignore", "AGENTS.md", "README.md", "ad-boundary.js", "app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "scripts", "service-worker.js", "styles.css", "tests",
+    ".github", ".gitignore", "AGENTS.md", "README.md", "ad-boundary.js", "android", "app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "release", "scripts", "service-worker.js", "styles.css", "tests",
   ]);
   if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["ad-boundary.js", "app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"]);
 });

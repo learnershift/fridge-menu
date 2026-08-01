@@ -5,3 +5,9 @@ coverage/
 .env
 .env.*
 !.env.example
+release/artifacts/
+release/captures/
+android/app/src/main/assets/pwa/
+android/.gradle/
+android/app/build/
+android/build/
