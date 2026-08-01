@@ -154,7 +154,7 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
 
 test("source tree and build output stay inside the release allowlists", async () => {
   const top = (await readdir(root)).sort();
-  assert.deepEqual(top.filter((name) => ![".git", "dist"].includes(name)), [
+  assert.deepEqual(top.filter((name) => ![".git", ".hermes", "dist"].includes(name)), [
     ".github", ".gitignore", "AGENTS.md", "README.md", "ad-boundary.js", "android", "app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "release", "scripts", "service-worker.js", "styles.css", "tests",
   ]);
   if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["ad-boundary.js", "app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"]);
