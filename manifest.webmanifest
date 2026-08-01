@@ -1,0 +1,20 @@
+{
+  "name": "Fridge Menu",
+  "short_name": "Fridge Menu",
+  "description": "Deterministic use-first meal ideas from ingredients already in your fridge.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbf8ef",
+  "theme_color": "#173f35",
+  "lang": "en",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173f35">
+  <meta name="description" content="Turn the ingredients you already have into deterministic use-first meal ideas.">
+  <title>Fridge Menu — use what matters first</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="Fridge Menu home">
+      <span class="brand__mark" aria-hidden="true">FM</span>
+      <span>Fridge Menu</span>
+    </a>
+    <p class="header-note">Local-first · no account needed</p>
+    <button id="install-button" class="button button--quiet" type="button" hidden>Install app</button>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-heading">
+      <div>
+        <p class="eyebrow">Cook the food that needs you</p>
+        <h1 id="hero-heading">A calmer answer to<br><em>“what should we eat?”</em></h1>
+        <p class="hero__copy">Add what is in your fridge, mark what needs using first, and get three dependable meal directions. Your list stays in this browser.</p>
+      </div>
+      <aside class="hero-card" aria-label="How it works">
+        <span class="hero-card__number">3</span>
+        <p><strong>ideas, every time.</strong><br>Urgent ingredients lead. Your original order breaks ties. No random shuffle.</p>
+      </aside>
+    </section>
+
+    <div class="workspace">
+      <section class="panel pantry-panel" aria-labelledby="fridge-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Step 1</p>
+            <h2 id="fridge-heading">Build your fridge list</h2>
+          </div>
+          <span id="ingredient-count" class="count-badge" aria-label="Ingredient count">0 / 8</span>
+        </div>
+
+        <form id="ingredient-form" class="ingredient-form" novalidate>
+          <div class="field field--grow">
+            <label for="ingredient-name">Ingredient</label>
+            <input id="ingredient-name" name="ingredient" type="text" maxlength="48" autocomplete="off" placeholder="e.g. spinach" required>
+          </div>
+          <div class="field">
+            <label for="ingredient-expiry">Expiry date</label>
+            <input id="ingredient-expiry" name="expiry" type="date" required>
+          </div>
+          <button class="button button--primary" type="submit">Add ingredient</button>
+        </form>
+
+        <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
+        <ol id="ingredient-list" class="ingredient-list" aria-label="Ingredients, sorted by use-first priority"></ol>
+
+        <div class="use-first-box">
+          <span>Use-first order</span>
+          <p id="use-first-preview">Your use-first order will appear here.</p>
+        </div>
+
+        <div class="panel-actions">
+          <button id="suggest-button" class="button button--accent" type="button" disabled>Make my menu</button>
+          <button id="clear-button" class="button button--quiet" type="button" disabled>Clear list</button>
+        </div>
+      </section>
+
+      <section class="panel menu-panel" aria-labelledby="menu-heading">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Step 2</p>
+            <h2 id="menu-heading" tabindex="-1">Your flexible menu</h2>
+          </div>
+        </div>
+        <p class="section-intro">These are adaptable cooking directions, not recipes or nutrition advice. Use pantry basics and season to your needs.</p>
+        <div id="suggestions" class="suggestions" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <div class="workspace secondary-workspace">
+      <section class="panel" aria-labelledby="favorites-heading">
+        <div class="section-heading"><div><p class="eyebrow">Saved locally</p><h2 id="favorites-heading">Favorites</h2></div></div>
+        <div id="favorites-list" class="suggestions"><p class="empty-state">Favorite a meal idea to keep it here.</p></div>
+      </section>
+      <section class="panel" aria-labelledby="history-heading">
+        <div class="section-heading"><div><p class="eyebrow">Recent menus</p><h2 id="history-heading">History</h2></div></div>
+        <div id="history-list" class="history-list"><p class="empty-state">Your recent generated menus will appear here.</p></div>
+      </section>
+    </div>
+
+    <aside id="ad-placeholder" class="ad-placeholder" aria-label="Nonfunctional advertising placeholder"></aside>
+
+    <section class="scope-note" aria-labelledby="scope-heading">
+      <p class="eyebrow">Transparent by design</p>
+      <h2 id="scope-heading">Your food data stays with you.</h2>
+      <p>Fridge Menu works without an account, analytics, tracking, or credentialed APIs. Your pantry, favorites, and history remain in this browser and can be cleared at any time.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Fridge Menu · saved only in your browser · no analytics or tracking</p>
+  </footer>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

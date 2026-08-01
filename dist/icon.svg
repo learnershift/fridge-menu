@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Fridge Menu</title>
+  <desc id="description">A leafy green ingredient inside a warm cream bowl.</desc>
+  <rect width="512" height="512" rx="112" fill="#fbf8ef"/>
+  <path d="M104 282c0-23 19-42 42-42h220c23 0 42 19 42 42v20c0 88-63 146-152 146S104 390 104 302z" fill="#e7a64b"/>
+  <path d="M153 257c17-97 88-154 206-166-5 111-68 177-171 185 45-30 83-68 116-115-57 46-99 78-151 96z" fill="#2f7d63"/>
+  <path d="M119 302h274" stroke="#173f35" stroke-width="24" stroke-linecap="round"/>
+</svg>
