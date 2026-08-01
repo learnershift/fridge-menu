@@ -3,6 +3,7 @@ import {
   MAX_INGREDIENTS,
   MIN_INGREDIENTS,
   generateSuggestions,
+  getExpiryStatus,
   normalizeName,
   sortUseFirst,
   validateIngredients,
@@ -223,7 +224,7 @@ function boot() {
     const ordered = sortUseFirst(ingredients);
     for (const item of ordered) {
       const row = document.createElement("li");
-      row.className = "ingredient-item";
+      row.className = `ingredient-item ingredient-item--${item.urgency}`;
       const dot = document.createElement("span");
       dot.className = `urgency-dot urgency-dot--${item.urgency}`;
       dot.setAttribute("aria-hidden", "true");
@@ -261,6 +262,10 @@ function boot() {
     const name = normalizeName(nameInput.value);
     if (!name || !expiryInput.value) {
       announce("Enter an ingredient and expiry date.", "error");
+      return;
+    }
+    if (getExpiryStatus(expiryInput.value) === "expired") {
+      announce("Remove expired ingredients before adding new ones.", "error");
       return;
     }
     if (ingredients.length >= MAX_INGREDIENTS || ingredients.some((item) => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) {

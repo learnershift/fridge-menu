@@ -28,6 +28,20 @@ test("expiry status follows exact local calendar-day boundaries", () => {
   assert.equal(getExpiryStatus("2026-08-05", today), "stable");
 });
 
+test("expired ingredients stay visible in ordering but cannot generate meal guidance", () => {
+  const records = [
+    { id: "expired", name: "Spinach", expiryDate: "2026-07-31", sequence: 0 },
+    { id: "today", name: "Tofu", expiryDate: "2026-08-01", sequence: 1 },
+    { id: "later", name: "Rice", expiryDate: "2026-08-05", sequence: 2 },
+  ];
+  assert.deepEqual(sortUseFirst(records, "2026-08-01").map((item) => item.urgency), ["expired", "use-now", "stable"]);
+  assert.deepEqual(validateIngredients(records, "2026-08-01"), {
+    ok: false,
+    message: "Remove expired ingredients before making a menu.",
+  });
+  assert.deepEqual(generateSuggestions(records, "2026-08-01"), []);
+});
+
 test("use-first sorting uses expiry date, then insertion order, and derives status", () => {
   const records = [
     { id: "late", name: "Rice", expiryDate: "2026-08-10", sequence: 0 },

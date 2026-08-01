@@ -14,7 +14,7 @@ Open `http://127.0.0.1:4173`. The app stores its versioned ingredient list only 
 
 ## Deterministic menu rule
 
-Ingredients sort by urgency (`use now`, `use soon`, `stable`) and then insertion order. The three meal directions anchor the first, second, and third sorted ingredient respectively, with remaining ingredients rotated in the same stable order.
+Ingredients sort by earliest valid expiry date, then insertion order for matching dates. The three meal directions anchor the first, second, and third sorted ingredient respectively, with remaining ingredients rotated in the same stable order. Expired ingredients remain visible so they can be removed, but are not accepted or used to generate meal directions.
 
 ## Advertising boundary
 

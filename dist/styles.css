@@ -67,6 +67,9 @@ input::placeholder { color: #7d8c86; }
 .urgency-dot--use-now { background: var(--coral); }
 .urgency-dot--use-soon { background: var(--amber); }
 .urgency-dot--stable { background: #4c806e; }
+.urgency-dot--expired { background: #a13527; }
+.ingredient-item--expired { background: #fff0ed; border: 1px solid #d98a7c; }
+.ingredient-item--expired .urgency-label { color: #8b2f23; font-weight: 800; }
 .ingredient-item__name { font-weight: 800; }
 .urgency-label { color: var(--muted); font-size: 0.76rem; text-transform: capitalize; }
 .remove-button { border: 0; background: transparent; color: #8b3c2d; padding: 0.45rem; font-size: 0.78rem; font-weight: 800; }
@@ -104,8 +107,8 @@ footer { padding: 1.5rem; color: var(--muted); text-align: center; font-size: 0.
   .hero { padding: 2.5rem 0; }
   h1 { font-size: clamp(2.7rem, 14vw, 4.2rem); }
   .ingredient-form { grid-template-columns: 1fr; }
-  .ingredient-item { grid-template-columns: auto 1fr auto; }
-  .urgency-label { display: none; }
+  .ingredient-item { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .urgency-label { display: inline; }
   .panel-actions { flex-direction: column; }
   .panel-actions .button { width: 100%; }
 }

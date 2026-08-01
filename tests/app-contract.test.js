@@ -58,6 +58,20 @@ test("responsive and reduced-motion rules are present", async () => {
   assert.match(css, /@media \(max-width: 620px\)/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css, /:focus-visible/);
+  assert.match(css, /\.urgency-dot--expired/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.urgency-label \{ display: inline; \}/);
+});
+
+test("expired entries are refused before they reach local state", async () => {
+  const app = await read("app.js");
+  assert.match(app, /getExpiryStatus\(expiryInput\.value\) === "expired"/);
+  assert.match(app, /Remove expired ingredients before adding new ones\./);
+});
+
+test("README documents date-backed sorting and expired-ingredient exclusion", async () => {
+  const readme = await read("README.md");
+  assert.match(readme, /earliest valid expiry date/);
+  assert.match(readme, /Expired ingredients remain visible so they can be removed, but are not accepted or used to generate meal directions\./);
 });
 
 test("offline shell contains only relative same-origin assets", async () => {
@@ -69,6 +83,11 @@ test("offline shell contains only relative same-origin assets", async () => {
   assert.equal(manifest.start_url, "./");
   assert.deepEqual(manifest.icons.map((icon) => icon.src), ["./icon.svg"]);
   assert.ok(worker.includes('"./icon.svg"'));
+});
+
+test("service-worker cache version is bumped for the current runtime shell", async () => {
+  const worker = await read("service-worker.js");
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v3"/);
 });
 
 test("ad boundary is placeholder-only and contains no live integration", async () => {

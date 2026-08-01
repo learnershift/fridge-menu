@@ -52,6 +52,7 @@ export function validateIngredients(records, today = localToday()) {
     const urgency = derived === "invalid" ? record?.urgency : derived;
     if (!name) return { ok: false, message: "Every ingredient needs a name." };
     if (!(urgency in URGENCY_RANK)) return { ok: false, message: "Every ingredient needs a valid expiry date." };
+    if (urgency === "expired") return { ok: false, message: "Remove expired ingredients before making a menu." };
     const key = name.toLocaleLowerCase("en-US");
     if (names.has(key)) return { ok: false, message: `“${name}” is already in your fridge.` };
     names.add(key);
