@@ -116,7 +116,22 @@ test("package has no dependency or install surface", async () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
-  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "build", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:release"]);
+  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:release"]);
+});
+
+test("Android evidence generator binds release checks and identity to the current artifact", async () => {
+  const pkg = JSON.parse(await read("package.json"));
+  const generator = await read("scripts/android-evidence.mjs");
+
+  assert.equal(pkg.scripts["android:evidence"], "node scripts/android-evidence.mjs");
+  assert.match(pkg.scripts["verify:release"], /android:evidence/);
+  assert.match(generator, /android-evidence-v1/);
+  assert.match(generator, /com\.learnershift\.fridgemenu/);
+  for (const check of ["tests", "build", "accessibility", "privacy_security", "offline"]) {
+    assert.match(generator, new RegExp(`${check}: \\"PASS\\"`));
+  }
+  assert.match(generator, /app-release\.aab/);
+  assert.match(generator, /sha256/);
 });
 
 test("release path is reproducible, unsigned, privacy-preserving, and owner-safe", async () => {

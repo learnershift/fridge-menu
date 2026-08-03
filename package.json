@@ -6,11 +6,12 @@
   "description": "A dependency-free local-first fridge meal planner PWA.",
   "scripts": {
     "android:aab": "node scripts/android-package.mjs",
+    "android:evidence": "node scripts/android-evidence.mjs",
     "build": "node scripts/build.mjs",
     "release:manifest": "node scripts/release-manifest.mjs",
     "test": "node --test tests/*.test.js",
     "store-assets": "node scripts/generate-store-assets.mjs",
-    "verify:release": "npm test && npm run build && npm run store-assets && node scripts/release-manifest.mjs",
+    "verify:release": "npm test && npm run build && npm run store-assets && node scripts/release-manifest.mjs && npm run android:evidence",
     "start": "node scripts/serve.mjs",
     "store-screenshot": "node scripts/capture-store-assets.mjs"
   }
