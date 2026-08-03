@@ -127,9 +127,13 @@ test("Android evidence generator binds release checks and identity to the curren
   assert.match(pkg.scripts["verify:release"], /android:evidence/);
   assert.match(generator, /android-evidence-v1/);
   assert.match(generator, /com\.learnershift\.fridgemenu/);
-  for (const check of ["tests", "build", "accessibility", "privacy_security", "offline"]) {
+  for (const check of ["tests", "build", "artifact_identity", "permissionless_shell"]) {
     assert.match(generator, new RegExp(`${check}: \\"PASS\\"`));
   }
+  for (const manualCheck of ["physical_device", "offline_relaunch", "talkback"]) {
+    assert.match(generator, new RegExp(`${manualCheck}: \\"OWNER_REQUIRED\\"`));
+  }
+  assert.doesNotMatch(generator, /accessibility: \\"PASS\\"|offline: \\"PASS\\"/);
   assert.match(generator, /app-release\.aab/);
   assert.match(generator, /sha256/);
 });

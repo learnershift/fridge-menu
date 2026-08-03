@@ -40,9 +40,11 @@ const evidence = {
   checks: {
     tests: "PASS",
     build: "PASS",
-    accessibility: "PASS",
-    privacy_security: "PASS",
-    offline: "PASS",
+    artifact_identity: "PASS",
+    permissionless_shell: "PASS",
+    physical_device: "OWNER_REQUIRED",
+    offline_relaunch: "OWNER_REQUIRED",
+    talkback: "OWNER_REQUIRED",
   },
 };
 const output = resolve(root, "release/artifacts/android-evidence.json");
