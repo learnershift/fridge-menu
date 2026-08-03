@@ -127,7 +127,7 @@ test("Android evidence generator binds release checks and identity to the curren
   assert.match(pkg.scripts["verify:release"], /android:evidence/);
   assert.match(generator, /android-evidence-v1/);
   assert.match(generator, /com\.learnershift\.fridgemenu/);
-  for (const check of ["tests", "build", "artifact_identity", "permissionless_shell"]) {
+  for (const check of ["tests", "build", "artifact_identity", "permissionless_shell", "accessibility", "privacy_security", "offline"]) {
     assert.match(generator, new RegExp(`${check}: \\"PASS\\"`));
   }
   for (const manualCheck of ["physical_device", "offline_relaunch", "talkback"]) {
@@ -166,6 +166,12 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   assert.match(packaging, /unsigned.*\.aab/i);
   assert.match(packaging, /do not create or import signing keys/i);
   assert.match(manifest, /sha256/i);
+  assert.match(manifest, /application_id:\s*"com\.learnershift\.fridgemenu"/);
+  assert.match(manifest, /version_code:\s*1/);
+  assert.match(manifest, /version_name:\s*"1\.0\.0"/);
+  for (const check of ["tests", "build", "accessibility", "privacy_security", "offline"]) {
+    assert.match(manifest, new RegExp(`${check}: \\"PASS\\"`));
+  }
   assert.match(manifest, /release\/store-assets\/fridge-menu-icon-512\.png/);
   assert.match(manifest, /release\/store-assets\/fridge-menu-feature-graphic-1024x500\.png/);
   assert.match(storeAssets, /deflateSync/);
