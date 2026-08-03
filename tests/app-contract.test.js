@@ -132,6 +132,7 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   const listing = await read("release/play-listing.md");
   const dataSafety = await read("release/data-safety.md");
   const handoff = await read("release/OWNER-HANDOFF.md");
+  const qaChecklist = await read("release/QA-CHECKLIST.md");
 
   assert.equal(pkg.scripts["android:aab"], "node scripts/android-package.mjs");
   assert.equal(pkg.scripts["release:manifest"], "node scripts/release-manifest.mjs");
@@ -159,6 +160,18 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   assert.match(listing, /Short description/);
   assert.match(dataSafety, /No data collected or shared/);
   assert.match(handoff, /Google Play Console/);
+  for (const required of [
+    "Artifact identity",
+    "Physical device",
+    "Offline",
+    "TalkBack",
+    "Screenshots",
+    "Owner approval",
+    "Rollback",
+  ]) assert.match(qaChecklist, new RegExp(required, "i"), `QA checklist missing ${required}`);
+  assert.match(qaChecklist, /app-release\.aab/);
+  assert.match(qaChecklist, /com\.learnershift\.fridgemenu/);
+  assert.match(qaChecklist, /Do not sign, upload, submit, publish, or launch/i);
 });
 
 test("Android release shell has a launcher icon and remains offline with no permissions", async () => {
