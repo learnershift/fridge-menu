@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { computeReleaseChecks, requirePassingChecks } from "./release-checks.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const gradle = await readFile(resolve(root, "android/app/build.gradle.kts"), "utf8");
@@ -25,6 +26,8 @@ const versionCode = Number(capture(/versionCode\s*=\s*(\d+)/, "version code"));
 const versionName = capture(/versionName\s*=\s*"([^"]+)"/, "version name");
 if (applicationId !== "com.learnershift.fridgemenu") throw new Error("Unexpected Android application ID.");
 if (/uses-permission/i.test(androidManifest) || /https?:\/\//i.test(mainActivity)) throw new Error("Android shell must remain permissionless and offline.");
+const releaseChecks = await computeReleaseChecks(root);
+requirePassingChecks(releaseChecks);
 
 const evidence = {
   schema: "android-evidence-v1",
@@ -38,13 +41,9 @@ const evidence = {
     unsigned: true,
   },
   checks: {
-    tests: "PASS",
-    build: "PASS",
-    artifact_identity: "PASS",
-    permissionless_shell: "PASS",
-    accessibility: "PASS",
-    privacy_security: "PASS",
-    offline: "PASS",
+    ...releaseChecks,
+    artifact_identity: applicationId === "com.learnershift.fridgemenu" && versionCode === 1 && versionName === "1.0.0" ? "PASS" : "FAIL",
+    permissionless_shell: !/uses-permission/i.test(androidManifest) && !/https?:\/\//i.test(mainActivity) ? "PASS" : "FAIL",
     physical_device: "OWNER_REQUIRED",
     offline_relaunch: "OWNER_REQUIRED",
     talkback: "OWNER_REQUIRED",

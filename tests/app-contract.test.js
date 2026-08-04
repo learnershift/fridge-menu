@@ -62,6 +62,11 @@ test("responsive and reduced-motion rules are present", async () => {
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.urgency-label \{ display: inline; \}/);
 });
 
+test("remove control guarantees a 44 by 44 pixel touch target", async () => {
+  const css = await read("styles.css");
+  assert.match(css, /\.remove-button\s*\{[^}]*min-width:\s*2\.75rem;[^}]*min-height:\s*2\.75rem;/);
+});
+
 test("expired entries are refused before they reach local state", async () => {
   const app = await read("app.js");
   assert.match(app, /getExpiryStatus\(expiryInput\.value\) === "expired"/);
@@ -119,7 +124,22 @@ test("package has no dependency or install surface", async () => {
   assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:release"]);
 });
 
-test("Android evidence generator binds release checks and identity to the current artifact", async () => {
+test("release checks are computed from source files and executed commands", async () => {
+  const { computeStaticReleaseChecks } = await import("../scripts/release-checks.mjs");
+  const passing = computeStaticReleaseChecks({
+    css: ".remove-button { min-width: 2.75rem; min-height: 2.75rem; }",
+    androidManifest: "<manifest><application /></manifest>",
+    mainActivity: 'view.loadUrl("file:///android_asset/pwa/index.html");',
+    serviceWorker: 'const files = ["./index.html"];',
+    adBoundary: "networkRequests: false; sdkLoaded: false; productionIdentifier: null;",
+  });
+  assert.deepEqual(passing, { accessibility: "PASS", privacy_security: "PASS", offline: "PASS" });
+  assert.equal(computeStaticReleaseChecks({ ...passing, css: ".remove-button { padding: 0; }" }).accessibility, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...passing, androidManifest: "<uses-permission />" }).privacy_security, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...passing, serviceWorker: 'fetch("https://example.test")' }).offline, "FAIL");
+});
+
+test("Android evidence generator binds computed release checks and identity to the current artifact", async () => {
   const pkg = JSON.parse(await read("package.json"));
   const generator = await read("scripts/android-evidence.mjs");
 
@@ -127,9 +147,8 @@ test("Android evidence generator binds release checks and identity to the curren
   assert.match(pkg.scripts["verify:release"], /android:evidence/);
   assert.match(generator, /android-evidence-v1/);
   assert.match(generator, /com\.learnershift\.fridgemenu/);
-  for (const check of ["tests", "build", "artifact_identity", "permissionless_shell", "accessibility", "privacy_security", "offline"]) {
-    assert.match(generator, new RegExp(`${check}: \\"PASS\\"`));
-  }
+  assert.match(generator, /computeReleaseChecks/);
+  assert.doesNotMatch(generator, /tests: "PASS"|build: "PASS"|accessibility: "PASS"|privacy_security: "PASS"|offline: "PASS"/);
   for (const manualCheck of ["physical_device", "offline_relaunch", "talkback"]) {
     assert.match(generator, new RegExp(`${manualCheck}: \\"OWNER_REQUIRED\\"`));
   }
@@ -169,9 +188,8 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   assert.match(manifest, /application_id:\s*"com\.learnershift\.fridgemenu"/);
   assert.match(manifest, /version_code:\s*1/);
   assert.match(manifest, /version_name:\s*"1\.0\.0"/);
-  for (const check of ["tests", "build", "accessibility", "privacy_security", "offline"]) {
-    assert.match(manifest, new RegExp(`${check}: \\"PASS\\"`));
-  }
+  assert.match(manifest, /computeReleaseChecks/);
+  assert.doesNotMatch(manifest, /tests: "PASS"|build: "PASS"|accessibility: "PASS"|privacy_security: "PASS"|offline: "PASS"/);
   assert.match(manifest, /release\/store-assets\/fridge-menu-icon-512\.png/);
   assert.match(manifest, /release\/store-assets\/fridge-menu-feature-graphic-1024x500\.png/);
   assert.match(storeAssets, /deflateSync/);

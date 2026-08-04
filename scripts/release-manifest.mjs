@@ -2,12 +2,15 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { computeReleaseChecks, requirePassingChecks } from "./release-checks.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "release/artifacts/release-manifest.json");
 const files = ["dist/ad-boundary.js", "dist/app.js", "dist/icon.svg", "dist/index.html", "dist/manifest.webmanifest", "dist/meal-engine.js", "dist/service-worker.js", "dist/styles.css", "release/store-assets/fridge-menu-icon-512.png", "release/store-assets/fridge-menu-feature-graphic-1024x500.png"];
 const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
 if (revision.status !== 0) throw new Error("Cannot bind release manifest: git revision unavailable.");
+const checks = await computeReleaseChecks(root);
+requirePassingChecks(checks);
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 const entries = [];
 for (const relativePath of files) {
@@ -29,13 +32,7 @@ const releaseEvidence = {
   application_id: "com.learnershift.fridgemenu",
   version_code: 1,
   version_name: "1.0.0",
-  checks: {
-    tests: "PASS",
-    build: "PASS",
-    accessibility: "PASS",
-    privacy_security: "PASS",
-    offline: "PASS",
-  },
+  checks,
   files: entries,
 };
 await writeFile(output, `${JSON.stringify(releaseEvidence, null, 2)}\n`);
