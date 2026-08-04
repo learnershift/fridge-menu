@@ -124,6 +124,16 @@ test("package has no dependency or install surface", async () => {
   assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:release"]);
 });
 
+test("verify:release builds the unsigned AAB before manifest and Android evidence", async () => {
+  const pkg = JSON.parse(await read("package.json"));
+  const steps = pkg.scripts["verify:release"].split(" && ");
+  const aab = steps.indexOf("npm run android:aab");
+
+  assert.notEqual(aab, -1, "verify:release must produce the unsigned AAB");
+  assert.ok(aab < steps.indexOf("node scripts/release-manifest.mjs"));
+  assert.ok(aab < steps.indexOf("npm run android:evidence"));
+});
+
 test("release checks are computed from source files and executed commands", async () => {
   const { computeStaticReleaseChecks } = await import("../scripts/release-checks.mjs");
   const passing = computeStaticReleaseChecks({
