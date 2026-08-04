@@ -227,9 +227,11 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   assert.match(qaChecklist, /Do not sign, upload, submit, publish, or launch/i);
 });
 
-test("GitHub Pages deploys only the freshly built dist artifact", async () => {
+test("GitHub Pages publication is manual-only and deploys only the freshly built dist artifact", async () => {
   const workflow = await read(".github/workflows/deploy-pages.yml");
 
+  assert.match(workflow, /^\s*workflow_dispatch:\s*$/m);
+  assert.doesNotMatch(workflow, /^\s*push:\s*$/m);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run build/);
   assert.match(workflow, /actions\/upload-pages-artifact@v3/);
