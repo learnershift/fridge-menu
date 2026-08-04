@@ -227,6 +227,18 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   assert.match(qaChecklist, /Do not sign, upload, submit, publish, or launch/i);
 });
 
+test("GitHub Pages deploys only the freshly built dist artifact", async () => {
+  const workflow = await read(".github/workflows/deploy-pages.yml");
+
+  assert.match(workflow, /npm test/);
+  assert.match(workflow, /npm run build/);
+  assert.match(workflow, /actions\/upload-pages-artifact@v3/);
+  assert.match(workflow, /path:\s*dist/);
+  assert.match(workflow, /actions\/deploy-pages@v4/);
+  assert.match(workflow, /pages:\s*write/);
+  assert.match(workflow, /id-token:\s*write/);
+});
+
 test("Android release shell has a launcher icon and remains offline with no permissions", async () => {
   const manifest = await read("android/app/src/main/AndroidManifest.xml");
   const activity = await read("android/app/src/main/java/com/learnershift/fridgemenu/MainActivity.java");
