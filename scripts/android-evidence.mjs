@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { computeReleaseChecks, requirePassingChecks } from "./release-checks.mjs";
+import { computeReleaseChecks, inspectAabSigning, requirePassingChecks } from "./release-checks.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const gradle = await readFile(resolve(root, "android/app/build.gradle.kts"), "utf8");
@@ -11,6 +11,8 @@ const mainActivity = await readFile(resolve(root, "android/app/src/main/java/com
 const releaseManifest = JSON.parse(await readFile(resolve(root, "release/artifacts/release-manifest.json"), "utf8"));
 const aabPath = "android/app/build/outputs/bundle/release/app-release.aab";
 const aab = await readFile(resolve(root, aabPath));
+const signing = inspectAabSigning(resolve(root, aabPath));
+if (signing === "UNKNOWN") throw new Error("Cannot bind Android evidence: AAB signing status is unknown.");
 const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
 if (revision.status !== 0) throw new Error("Cannot bind Android evidence: Git revision unavailable.");
 const sourceRevision = revision.stdout.trim();
@@ -38,7 +40,8 @@ const evidence = {
   aab: {
     path: aabPath,
     sha256: createHash("sha256").update(aab).digest("hex"),
-    unsigned: true,
+    signing,
+    unsigned: signing === "UNSIGNED",
   },
   checks: {
     ...releaseChecks,

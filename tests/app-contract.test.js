@@ -140,12 +140,12 @@ test("package has no dependency or install surface", async () => {
   assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:release"]);
 });
 
-test("verify:release builds the unsigned AAB before manifest and Android evidence", async () => {
+test("verify:release builds the AAB before manifest and Android evidence", async () => {
   const pkg = JSON.parse(await read("package.json"));
   const steps = pkg.scripts["verify:release"].split(" && ");
   const aab = steps.indexOf("npm run android:aab");
 
-  assert.notEqual(aab, -1, "verify:release must produce the unsigned AAB");
+  assert.notEqual(aab, -1, "verify:release must produce the AAB");
   assert.ok(aab < steps.indexOf("node scripts/release-manifest.mjs"));
   assert.ok(aab < steps.indexOf("npm run android:evidence"));
 });
@@ -174,6 +174,7 @@ test("Android evidence generator binds computed release checks and identity to t
   assert.match(generator, /android-evidence-v1/);
   assert.match(generator, /com\.learnershift\.fridgemenu/);
   assert.match(generator, /computeReleaseChecks/);
+  assert.match(generator, /inspectAabSigning/);
   assert.doesNotMatch(generator, /tests: "PASS"|build: "PASS"|accessibility: "PASS"|privacy_security: "PASS"|offline: "PASS"/);
   for (const manualCheck of ["physical_device", "offline_relaunch", "talkback"]) {
     assert.match(generator, new RegExp(`${manualCheck}: \\"OWNER_REQUIRED\\"`));
@@ -183,7 +184,7 @@ test("Android evidence generator binds computed release checks and identity to t
   assert.match(generator, /sha256/);
 });
 
-test("release path is reproducible, unsigned, privacy-preserving, and owner-safe", async () => {
+test("release path is reproducible, signing-ready, privacy-preserving, and owner-safe", async () => {
   const pkg = JSON.parse(await read("package.json"));
   const androidBuild = await read("android/app/build.gradle.kts");
   const androidRootBuild = await read("android/build.gradle.kts");
@@ -197,6 +198,7 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   const dataSafety = await read("release/data-safety.md");
   const handoff = await read("release/OWNER-HANDOFF.md");
   const qaChecklist = await read("release/QA-CHECKLIST.md");
+  const gitignore = await read(".gitignore");
 
   assert.equal(pkg.scripts["android:aab"], "node scripts/android-package.mjs");
   assert.equal(pkg.scripts["release:manifest"], "node scripts/release-manifest.mjs");
@@ -204,12 +206,18 @@ test("release path is reproducible, unsigned, privacy-preserving, and owner-safe
   assert.equal(pkg.scripts["store-screenshot"], "node scripts/capture-store-assets.mjs");
   assert.ok(pkg.scripts["verify:release"].includes("npm test"));
   assert.ok(pkg.scripts["verify:release"].includes("npm run build"));
-  assert.match(androidBuild, /signingConfig\s*=\s*null/);
+  assert.match(androidBuild, /compileSdk\s*=\s*36/);
+  assert.match(androidBuild, /targetSdk\s*=\s*36/);
+  for (const variable of ["FRIDGE_MENU_KEYSTORE_PATH", "FRIDGE_MENU_KEYSTORE_PASSWORD", "FRIDGE_MENU_KEY_ALIAS", "FRIDGE_MENU_KEY_PASSWORD"]) {
+    assert.match(androidBuild, new RegExp(variable));
+  }
   assert.match(androidBuild, /applicationId\s*=\s*"com.learnershift.fridgemenu"/);
-  assert.match(androidRootBuild, /com\.android\.application"\) version "8\.6\.1"/);
+  assert.match(androidRootBuild, /com\.android\.application"\) version "8\.9\.1"/);
   assert.match(packaging, /FRIDGE_MENU_ANDROID_SDK/);
-  assert.match(packaging, /unsigned.*\.aab/i);
+  assert.match(packaging, /inspectAabSigning/);
   assert.match(packaging, /do not create or import signing keys/i);
+  assert.match(gitignore, /\*\.jks/);
+  assert.match(gitignore, /\*\.keystore/);
   assert.match(manifest, /sha256/i);
   assert.match(manifest, /application_id:\s*"com\.learnershift\.fridgemenu"/);
   assert.match(manifest, /version_code:\s*1/);
@@ -260,13 +268,14 @@ test("GitHub Pages publication is manual-only and deploys only the freshly built
 test("Android release shell has a launcher icon and remains offline with no permissions", async () => {
   const manifest = await read("android/app/src/main/AndroidManifest.xml");
   const activity = await read("android/app/src/main/java/com/learnershift/fridgemenu/MainActivity.java");
-  const icon = await read("android/app/src/main/res/drawable/ic_launcher.xml");
+  const icon = await read("android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml");
 
-  assert.match(manifest, /android:icon="@drawable\/ic_launcher"/);
+  assert.match(manifest, /android:icon="@mipmap\/ic_launcher"/);
+  assert.match(manifest, /android:roundIcon="@mipmap\/ic_launcher_round"/);
   assert.doesNotMatch(manifest, /uses-permission/);
   assert.match(activity, /file:\/\/\/android_asset\/pwa\/index\.html/);
   assert.doesNotMatch(activity, /https?:\/\//i);
-  assert.match(icon, /<vector/);
+  assert.match(icon, /<adaptive-icon/);
 });
 
 test("Play upload icon is a 512px PNG derived from the canonical app artwork", async () => {

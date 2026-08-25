@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { computeReleaseChecks, requirePassingChecks } from "./release-checks.mjs";
+import { computeReleaseChecks, inspectAabSigning, requirePassingChecks } from "./release-checks.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "release/artifacts/release-manifest.json");
@@ -20,7 +20,9 @@ for (const relativePath of files) {
 const aab = resolve(root, "android/app/build/outputs/bundle/release/app-release.aab");
 try {
   const bytes = await readFile(aab);
-  entries.push({ path: "android/app/build/outputs/bundle/release/app-release.aab", bytes: bytes.length, sha256: digest(bytes), unsigned: true });
+  const signing = inspectAabSigning(aab);
+  if (signing === "UNKNOWN") throw new Error("AAB signing status is unknown.");
+  entries.push({ path: "android/app/build/outputs/bundle/release/app-release.aab", bytes: bytes.length, sha256: digest(bytes), signing, unsigned: signing === "UNSIGNED" });
 } catch (error) {
   if (error.code !== "ENOENT") throw error;
 }

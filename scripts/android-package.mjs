@@ -1,6 +1,7 @@
 import { access, cp, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { inspectAabSigning } from "./release-checks.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 // Do not create or import signing keys; Play Console signing is owner-controlled.
@@ -27,7 +28,8 @@ const result = spawnSync(gradle, [":app:bundleRelease"], { cwd: android, stdio: 
 if (result.error || result.status !== 0) {
   throw new Error("Android Gradle 8.7+ must already be installed and available as gradle. This script does not create or import signing keys, install SDKs, or download a wrapper.");
 }
-// The Android release task leaves the unsigned app-release.aab by design.
 const output = resolve(android, "app/build/outputs/bundle/release/app-release.aab");
 await access(output);
-console.log(`AAB_UNSIGNED_OK path=${output}`);
+const signing = inspectAabSigning(output);
+if (signing === "UNKNOWN") throw new Error("Unable to determine AAB signing status with jarsigner.");
+console.log(`AAB_${signing}_OK path=${output}`);

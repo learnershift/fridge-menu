@@ -12,3 +12,5 @@ android/app/src/main/assets/pwa/
 android/.gradle/
 android/app/build/
 android/build/
+*.jks
+*.keystore
