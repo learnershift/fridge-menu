@@ -90,7 +90,11 @@ input::placeholder { color: #7d8c86; }
 .scope-note { background: #f2e9db; border-radius: 1.4rem; padding: clamp(1.5rem, 4vw, 2.5rem); margin-top: 1.25rem; }
 .scope-note h2 { max-width: 700px; }
 .scope-note > p:last-child { color: var(--muted); max-width: 840px; line-height: 1.65; }
+.privacy-policy { margin-top: 1.25rem; padding: clamp(1.5rem, 4vw, 2.5rem); border: 1px solid var(--line); border-radius: 1.4rem; background: var(--panel); }
+.privacy-policy > p { color: var(--muted); max-width: 900px; line-height: 1.65; }
+.privacy-policy h3 { margin: 1.5rem 0 0.35rem; }
 footer { padding: 1.5rem; color: var(--muted); text-align: center; font-size: 0.8rem; }
+footer a { color: inherit; }
 
 @media (max-width: 860px) {
   .hero { grid-template-columns: 1fr; min-height: auto; gap: 1rem; }

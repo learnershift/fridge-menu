@@ -1,5 +1,12 @@
 # Owner handoff and submission gate
 
+## Owner-supplied privacy values
+
+- `[OWNER_REQUIRED:LEGAL_NAME]`: legal developer or business name matching the Play listing
+- `[OWNER_REQUIRED:PRIVACY_EMAIL]`: monitored privacy contact email
+- `[OWNER_REQUIRED:PUBLIC_POLICY_URL]`: stable public HTTPS policy URL
+- `[OWNER_REQUIRED:PRIVACY_OFFICER]`: Korean privacy officer name
+
 ## Locally reproducible evidence
 
 1. Run `npm run verify:release` to test, rebuild `dist/`, and create `release/artifacts/release-manifest.json`. It binds the current Git revision to SHA-256 checksums.

@@ -53,6 +53,22 @@ test("HTML contains semantic accessible pantry favorites history and install con
   assert.doesNotMatch(html, /<script[^>]+https?:|<link[^>]+https?:/i);
 });
 
+test("privacy policy is available in-app and keeps owner-only identity values explicit", async () => {
+  const [html, policy, handoff] = await Promise.all([
+    read("index.html"), read("release/privacy-policy.md"), read("release/OWNER-HANDOFF.md"),
+  ]);
+  assert.match(html, /href="#privacy"/);
+  assert.match(html, /id="privacy"/);
+  assert.match(html, /Data retention and deletion/);
+  for (const heading of ["Data retention and deletion", "Your privacy rights", "Children", "Policy changes"]) {
+    assert.match(policy, new RegExp(`## ${heading}`));
+  }
+  for (const marker of ["LEGAL_NAME", "PRIVACY_EMAIL", "PUBLIC_POLICY_URL", "PRIVACY_OFFICER"]) {
+    assert.match(policy, new RegExp(`OWNER_REQUIRED:${marker}`));
+  }
+  assert.match(handoff, /Owner-supplied privacy values/);
+});
+
 test("responsive and reduced-motion rules are present", async () => {
   const css = await read("styles.css");
   assert.match(css, /@media \(max-width: 620px\)/);
