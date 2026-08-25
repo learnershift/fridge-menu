@@ -6,10 +6,11 @@ This checklist separates locally verified release evidence from owner-only devic
 
 - [ ] Confirm the clean source revision matches `release/artifacts/release-manifest.json`.
 - [ ] Run `npm run verify:release` and retain its passing output.
-- [ ] Build the unsigned Android artifact with `npm run android:aab`.
+- [ ] Build the Android artifact with `npm run android:aab`; unsigned output is local evidence only.
 - [ ] Confirm the artifact is `android/app/build/outputs/bundle/release/app-release.aab` and the application ID is `com.learnershift.fridgemenu`.
 - [ ] Build twice from the same clean revision and confirm identical SHA-256 digests.
 - [ ] Confirm no signing key, production ad identifier, analytics, tracker, remote API, or Android network permission is present.
+- [ ] Before Play upload, provide owner-controlled signing variables, rebuild, require `AAB_SIGNED_OK`, and record the signed AAB digest.
 
 ## 2. Physical device QA (owner/device required)
 
@@ -33,7 +34,7 @@ This checklist separates locally verified release evidence from owner-only devic
 
 ## 5. Screenshots and Play materials (owner/device required)
 
-- [ ] Capture at least two final phone screenshots from the exact candidate build without personal data.
+- [ ] Confirm all four final 1080×1920 phone screenshots match the exact candidate and contain no personal data or unfinished advertising UI.
 - [ ] Verify screenshots, icon, feature graphic, listing, privacy policy, data-safety answers, and release notes describe the same candidate.
 - [ ] Supply the final public privacy-policy URL and support contact in Play Console.
 
@@ -45,7 +46,19 @@ Do not sign, upload, submit, publish, or launch without fresh owner approval nam
 - [ ] Owner explicitly approves signing/upload/submission for that target.
 - [ ] Owner separately approves any final publication or production rollout.
 
-## 7. Rollback
+## 7. Future AdMob disclosure coupling
+
+If AdMob or any advertising SDK is introduced later, the same candidate change must update and re-verify all five surfaces before release:
+
+- [ ] Ads declaration
+- [ ] Data safety
+- [ ] Advertising ID / Android permission state
+- [ ] `release/privacy-policy.md`
+- [ ] `release/play-listing.md`
+
+Any mismatch blocks submission.
+
+## 8. Rollback
 
 - [ ] Preserve the prior accepted source revision, version code, artifact digest, and store metadata.
 - [ ] Before rollout, document how to halt/withdraw the release in Play Console and restore the prior listing/build where the platform permits.

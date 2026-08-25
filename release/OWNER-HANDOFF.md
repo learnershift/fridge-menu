@@ -9,21 +9,52 @@
 
 ## Locally reproducible evidence
 
-1. Run `npm run verify:release` to test, rebuild `dist/`, and create `release/artifacts/release-manifest.json`. It binds the current Git revision to SHA-256 checksums.
-2. With an already installed Android SDK and Gradle, set `FRIDGE_MENU_ANDROID_SDK` to that SDK path and run `npm run android:aab`. The output, if successful, is `android/app/build/outputs/bundle/release/app-release.aab`; it is intentionally unsigned.
-3. Run `npm run release:manifest` again after the AAB is made to include its checksum. Do not create or import signing keys.
+1. Use JDK 17, Android SDK 36, and Gradle 8.11.1. Set `FRIDGE_MENU_ANDROID_SDK`, then run `npm run verify:release` from a clean revision.
+2. The build writes `android/app/build/outputs/bundle/release/app-release.aab`. Without owner signing variables it is a local **unsigned** verification artifact only.
+3. A Play upload requires a **signed AAB**. The owner stores the upload keystore outside the repository and supplies all four environment variables: `FRIDGE_MENU_KEYSTORE_PATH`, `FRIDGE_MENU_KEYSTORE_PASSWORD`, `FRIDGE_MENU_KEY_ALIAS`, and `FRIDGE_MENU_KEY_PASSWORD`.
+4. Rebuild and require `AAB_SIGNED_OK`; then regenerate `release/artifacts/release-manifest.json` and `android-evidence.json`. Never upload an unsigned AAB.
 
-## Owner-only Google Play Console work
+## Account and production-access gates (owner only)
 
-- Register or select the Play Console app, complete app access, ads, target audience, content rating, countries, and contact fields.
-- Publish `privacy-policy.md` at a stable public HTTPS URL and enter it in Google Play Console.
-- The repository now supplies `release/store-assets/fridge-menu-icon-512.png` and `release/store-assets/fridge-menu-feature-graphic-1024x500.png`; regenerate the feature graphic with `npm run store-assets`. Provide at least two device screenshots captured from the final app. Run `npm start` and then `npm run store-screenshot`; set `FRIDGE_MENU_CHROME_BIN` or `FRIDGE_MENU_CAPTURE_URL` if needed. This captures a reproducible 1080 x 1920 browser image but does not replace final physical-device captures.
-- Upload the unsigned AAB only through the owner-controlled Play Console signing flow, then verify the generated test-track artifact on a physical device.
+1. Check the Google Play Console developer-account creation date. For a personal account created after **13 November 2023**, the closed-test gate below applies.
+2. Complete developer identity verification. A personal account can require an official government identity document; publishing remains blocked until verification succeeds.
+3. Complete device verification when Play Console shows the task: use the Play Console mobile app and its QR flow on a non-rooted physical Android 10+ device while signed in as the account owner.
+4. Verify the contact email and phone number with the required OTP codes, and keep both operational. Korean personal accounts also require a verified developer phone number for publishing.
+5. Create the app and complete setup, then run a closed test with at least **12 testers** opted in for **14 consecutive days**. Recruit at least 15 real people for margin. If the active count drops below 12 or a tester opts out, do not credit a non-consecutive interval.
+6. Apply for production access only after the gate is met. Prepare the testing summary, app/target-audience explanation, and production-readiness explanation requested by the application.
+
+Official references: [new personal-account testing](https://support.google.com/googleplay/android-developer/answer/14151465), [device verification](https://support.google.com/googleplay/android-developer/answer/14316361), [developer identity](https://support.google.com/googleplay/android-developer/answer/10841920), and [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756).
+
+## Play Console questionnaire answers
+
+Re-confirm every answer against the exact signed candidate before saving it in Play Console.
+
+| Console item | Candidate answer | Repository basis |
+|---|---|---|
+| App access | All functionality is available without special access | No account, login, subscription, or restricted flow |
+| Ads declaration | No | Advertising UI and SDK are absent |
+| Data safety | No data collected or shared | Zero Android permissions, no INTERNET permission, no third-party dependencies, local WebView storage only |
+| Data deletion | Clear list, clear app storage, or uninstall | No server copy exists |
+| Content rating | No violence, sexual content, gambling, drugs, or user-generated content | Deterministic local cooking directions only |
+| Target audience | Not directed to children | Product copy and privacy policy state this boundary |
+| Health apps declaration | `My app doesn't provide any health features` | No nutrition data, diet/weight goal, health tracking, medical claim, or health data; meal output is generic cooking-direction text. Re-check the current form because Google's examples include some meal-planning tools |
+| Government apps | Not a government app | No government affiliation or service |
+| Financial features | None | No financial product, transaction, or advice |
+| Advertising ID | Not used | No `AD_ID` permission, ads SDK, or identifier access |
+
+## Submission sequence (owner only)
+
+1. Finalize the four privacy values above, approve stable HTTPS hosting, publish the policy, and enter its URL in Play Console.
+2. Upload the signed AAB to internal testing, install it on a physical device, and complete the exact QA checklist.
+3. Use the four tracked 1080×1920 screenshots, 512×512 icon, and alpha-free 1024×500 feature graphic only if they still match the signed candidate.
+4. Complete app access, ads, Data safety, target audience, content rating, Health apps declaration, Government apps, Financial features, and Advertising ID forms using the table above.
+5. If the 12 testers / 14 consecutive days gate applies, complete it before requesting production access.
+6. Final submission, publication, visibility changes, and production rollout each require fresh owner approval for the exact target.
 
 ## Release QA record
 
-Record the Git revision, release-manifest SHA-256 entries, AAB SHA-256, CI run URL, Android/Gradle versions, device/OS, install result, offline launch result, screen-reader check, and final questionnaire answers. Stop if any network permission, SDK, analytics, identifier, account flow, or external URL appears.
+Record the Git revision, release-manifest and AAB SHA-256, AAB signing status, CI run URL, Android/Gradle versions, device/OS, install and offline-relaunch results, TalkBack result, screenshot identity, and final questionnaire answers. Stop if any unexpected permission, SDK, analytics, identifier, account flow, or external URL appears.
 
 ## Current boundary
 
-No signing key, Play account access, public policy URL, store assets, Play questionnaire, upload, publication, real-device test, or Android SDK/Gradle installation is performed by this repository.
+Local automation did not create/import a signing key, access Play Console, fill questionnaires, publish the privacy policy, upload an artifact, run a physical-device test, submit, or publish.
