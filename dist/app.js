@@ -1,4 +1,3 @@
-import { AD_PLACEHOLDER, renderAdPlaceholder } from "./ad-boundary.js";
 import {
   MAX_INGREDIENTS,
   MIN_INGREDIENTS,
@@ -107,7 +106,6 @@ function boot() {
   const historyList = document.querySelector("#history-list");
   const useFirst = document.querySelector("#use-first-preview");
   const installButton = document.querySelector("#install-button");
-  const adSlot = document.querySelector("#ad-placeholder");
 
   const restored = parseStoredState(window.localStorage.getItem(STORAGE_KEY));
   let ingredients = restored.ingredients;
@@ -316,15 +314,13 @@ function boot() {
     installButton.hidden = true;
   });
 
-  renderAdPlaceholder(adSlot);
-  adSlot.dataset.mode = AD_PLACEHOLDER.mode;
   render();
   renderSuggestions(currentSuggestions);
   renderFavorites();
   renderHistory();
   announce(ingredients.length ? `Restored ${ingredients.length} locally saved ingredients.` : "Ready for your ingredients.");
 
-  if ("serviceWorker" in navigator && window.isSecureContext) {
+  if ("serviceWorker" in navigator && window.isSecureContext && location.protocol !== "file:") {
     navigator.serviceWorker.register("./service-worker.js").catch(() => announce("Offline caching is unavailable in this browser.", "warning"));
   }
 }

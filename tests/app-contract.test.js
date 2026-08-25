@@ -83,7 +83,8 @@ test("offline shell contains only relative same-origin assets", async () => {
   const worker = await read("service-worker.js");
   const manifest = JSON.parse(await read("manifest.webmanifest"));
   assert.doesNotMatch(worker, /["']https?:\/\//i);
-  for (const asset of ["./index.html", "./styles.css", "./app.js", "./meal-engine.js", "./ad-boundary.js", "./manifest.webmanifest"]) assert.ok(worker.includes(`"${asset}"`));
+  for (const asset of ["./index.html", "./styles.css", "./app.js", "./meal-engine.js", "./manifest.webmanifest"]) assert.ok(worker.includes(`"${asset}"`));
+  assert.doesNotMatch(worker, /ad-boundary/);
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.start_url, "./");
   assert.deepEqual(manifest.icons.map((icon) => icon.src), ["./icon.svg"]);
@@ -92,16 +93,31 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v3"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v4"/);
 });
 
-test("ad boundary is placeholder-only and contains no live integration", async () => {
-  const ad = await read("ad-boundary.js");
-  assert.match(ad, /placeholder-only/);
-  assert.match(ad, /networkRequests: false/);
-  assert.match(ad, /sdkLoaded: false/);
-  assert.match(ad, /productionIdentifier: null/);
-  assert.doesNotMatch(ad, /ca-app-pub-|https?:\/\//i);
+test("unfinished advertising UI and runtime code are absent", async () => {
+  const [html, app, css] = await Promise.all([read("index.html"), read("app.js"), read("styles.css")]);
+  assert.doesNotMatch(html, /ad-placeholder|advertising placeholder/i);
+  assert.doesNotMatch(app, /ad-boundary|renderAdPlaceholder|AD_PLACEHOLDER/);
+  assert.doesNotMatch(css, /\.ad-placeholder/);
+});
+
+test("Android shell handles system insets, WebView history, rotation, and file-safe navigation", async () => {
+  const [html, app, manifest, activity] = await Promise.all([
+    read("index.html"), read("app.js"), read("android/app/src/main/AndroidManifest.xml"),
+    read("android/app/src/main/java/com/learnershift/fridgemenu/MainActivity.java"),
+  ]);
+  assert.match(html, /class="brand" href="\.\/index\.html"/);
+  assert.match(app, /location\.protocol !== "file:"/);
+  assert.match(manifest, /android:configChanges="orientation\|screenSize\|screenLayout\|keyboardHidden\|uiMode"/);
+  assert.match(activity, /private WebView webView;/);
+  assert.match(activity, /setOnApplyWindowInsetsListener/);
+  assert.match(activity, /webView\.canGoBack\(\)/);
+  assert.match(activity, /setUseWideViewPort\(true\)/);
+  assert.match(activity, /setLoadWithOverviewMode\(true\)/);
+  assert.match(activity, /setAllowFileAccessFromFileURLs\(false\)/);
+  assert.match(activity, /setAllowUniversalAccessFromFileURLs\(false\)/);
 });
 
 test("user values are rendered with textContent and browser workflow persists all local state", async () => {
@@ -270,7 +286,7 @@ test("Play feature graphic is a deterministic 1024 by 500 PNG", async () => {
 test("source tree and build output stay inside the release allowlists", async () => {
   const top = (await readdir(root)).sort();
   assert.deepEqual(top.filter((name) => ![".git", ".hermes", "dist"].includes(name)), [
-    ".github", ".gitignore", "AGENTS.md", "README.md", "ad-boundary.js", "android", "app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "release", "scripts", "service-worker.js", "styles.css", "tests",
+    ".github", ".gitignore", "AGENTS.md", "README.md", "android", "app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "release", "scripts", "service-worker.js", "styles.css", "tests",
   ]);
-  if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["ad-boundary.js", "app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"]);
+  if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"]);
 });

@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "dist");
 const runtimeFiles = Object.freeze([
-  "ad-boundary.js",
   "app.js",
   "icon.svg",
   "index.html",

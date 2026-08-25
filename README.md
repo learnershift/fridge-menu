@@ -18,7 +18,7 @@ Ingredients sort by earliest valid expiry date, then insertion order for matchin
 
 ## Advertising boundary
 
-The visible advertising area is a nonfunctional test placeholder. It loads no SDK, makes no ad request, and contains no production account, credential, secret, or ad-unit identifier. Google AdMob is only a future product direction. Subscription, paid tier, checkout, pricing, and affiliate activation are deferred.
+The current app contains no advertising UI, SDK, request, production account, credential, secret, or ad-unit identifier. Google AdMob remains a future product direction and requires a separate policy, privacy, disclosure, and implementation review before it can be introduced. Subscription, paid tier, checkout, pricing, and affiliate activation are deferred.
 
 ## Evidence boundary
 
