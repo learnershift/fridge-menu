@@ -16,6 +16,6 @@ Meal directions are flexible cooking prompts, not recipes, nutrition advice, all
 
 Category: Food & Drink
 
-Tags: meal planner, fridge, leftovers, offline cooking, food waste
+Internal keyword reference — do not paste into Play Console: meal planner, fridge, leftovers, offline cooking, food waste
 
 Owner-required fields before submission: public privacy-policy URL, monitored support email, target audience/content rating answers, country availability, and current Play policy declarations.

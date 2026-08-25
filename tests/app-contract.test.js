@@ -75,7 +75,9 @@ test("responsive and reduced-motion rules are present", async () => {
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css, /:focus-visible/);
   assert.match(css, /\.urgency-dot--expired/);
-  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.urgency-label \{ display: inline; \}/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.urgency-label \{ display: inline; grid-column: 2; \}/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.meal-card \{ grid-template-columns: 1fr; \}/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.ingredient-item \{ grid-template-columns: auto minmax\(0, 1fr\) auto; \}/);
 });
 
 test("remove control guarantees a 44 by 44 pixel touch target", async () => {
@@ -246,6 +248,9 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(storeAssets, /1024/);
   assert.match(capture, /--headless/);
   assert.match(capture, /FRIDGE_MENU_CHROME_BIN/);
+  for (const name of ["01-empty-home", "02-use-first-list", "03-menu-results", "04-favorites-history"]) {
+    assert.match(capture, new RegExp(name));
+  }
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run build/);
   assert.match(workflow, /release:manifest/);
@@ -306,6 +311,7 @@ test("Play feature graphic is a deterministic 1024 by 500 PNG", async () => {
   assert.deepEqual([...graphic.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.equal(graphic.readUInt32BE(16), 1024);
   assert.equal(graphic.readUInt32BE(20), 500);
+  assert.equal(graphic[25], 2, "feature graphic must be truecolor RGB without alpha");
 });
 
 test("source tree and build output stay inside the release allowlists", async () => {

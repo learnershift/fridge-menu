@@ -6,15 +6,15 @@ const width = 1024;
 const height = 500;
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "release/store-assets/fridge-menu-feature-graphic-1024x500.png");
-const pixels = Buffer.alloc(width * height * 4);
+const pixels = Buffer.alloc(width * height * 3);
 const palette = {
-  cream: [251, 248, 239, 255], green: [23, 63, 53, 255], leaf: [47, 125, 99, 255],
-  gold: [231, 166, 75, 255], lime: [233, 244, 106, 255], ink: [23, 63, 53, 255],
+  cream: [251, 248, 239], green: [23, 63, 53], leaf: [47, 125, 99],
+  gold: [231, 166, 75], lime: [233, 244, 106], ink: [23, 63, 53],
 };
 
 function set(x, y, color) {
   if (x < 0 || y < 0 || x >= width || y >= height) return;
-  const index = (y * width + x) * 4;
+  const index = (y * width + x) * 3;
   pixels.set(color, index);
 }
 function rect(x, y, w, h, color) {
@@ -64,9 +64,9 @@ text("MENU", 72, 230, 21, palette.green);
 rect(72, 401, 424, 12, palette.gold);
 text("USE FIRST", 72, 438, 7, palette.green);
 
-const raw = Buffer.alloc((width * 4 + 1) * height);
-for (let y = 0; y < height; y += 1) { raw[y * (width * 4 + 1)] = 0; pixels.copy(raw, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4); }
-const header = Buffer.alloc(13); header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 6;
+const raw = Buffer.alloc((width * 3 + 1) * height);
+for (let y = 0; y < height; y += 1) { raw[y * (width * 3 + 1)] = 0; pixels.copy(raw, y * (width * 3 + 1) + 1, y * width * 3, (y + 1) * width * 3); }
+const header = Buffer.alloc(13); header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 2;
 await mkdir(resolve(root, "release/store-assets"), { recursive: true });
 await writeFile(output, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(raw, { level: 9 })), chunk("IEND", Buffer.alloc(0))]));
 console.log(`STORE_ASSET_OK path=${output} width=${width} height=${height}`);
