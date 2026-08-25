@@ -72,12 +72,13 @@ test("privacy policy is available in-app and keeps owner-only identity values ex
 test("owner handoff covers current Play gates, questionnaire answers, and future ad disclosure coupling", async () => {
   const [handoff, qa] = await Promise.all([read("release/OWNER-HANDOFF.md"), read("release/QA-CHECKLIST.md")]);
   for (const required of [
-    "13 November 2023", "12 testers", "14 consecutive days", "production access",
+    "organization account", "D-U-N-S", "production track",
     "developer identity", "device verification", "OTP", "Health apps declaration",
     "Government apps", "Financial features", "Advertising ID", "signed AAB",
     "Play Console questionnaire answers", "No data collected or shared",
   ]) assert.match(handoff, new RegExp(required, "i"), `handoff missing ${required}`);
   assert.doesNotMatch(handoff, /Upload the unsigned AAB/i);
+  assert.doesNotMatch(handoff, /12 testers|14 consecutive days|13 November 2023/i);
   for (const coupledUpdate of ["Ads declaration", "Data safety", "Advertising ID", "privacy-policy", "play-listing"]) {
     assert.match(qa, new RegExp(coupledUpdate, "i"), `QA missing future AdMob update: ${coupledUpdate}`);
   }

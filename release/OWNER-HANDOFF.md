@@ -14,16 +14,15 @@
 3. A Play upload requires a **signed AAB**. The owner stores the upload keystore outside the repository and supplies all four environment variables: `FRIDGE_MENU_KEYSTORE_PATH`, `FRIDGE_MENU_KEYSTORE_PASSWORD`, `FRIDGE_MENU_KEY_ALIAS`, and `FRIDGE_MENU_KEY_PASSWORD`.
 4. Rebuild and require `AAB_SIGNED_OK`; then regenerate `release/artifacts/release-manifest.json` and `android-evidence.json`. Never upload an unsigned AAB.
 
-## Account and production-access gates (owner only)
+## Account and production-track gates (owner only)
 
-1. Check the Google Play Console developer-account creation date. For a personal account created after **13 November 2023**, the closed-test gate below applies.
-2. Complete developer identity verification. A personal account can require an official government identity document; publishing remains blocked until verification succeeds.
+1. Account type is confirmed as an **organization account** by the owner on 2026-08-25.
+2. Check only the current developer identity status. If Play Console requests remediation, complete the organization verification using the matching D-U-N-S number and business documents before submission.
 3. Complete device verification when Play Console shows the task: use the Play Console mobile app and its QR flow on a non-rooted physical Android 10+ device while signed in as the account owner.
-4. Verify the contact email and phone number with the required OTP codes, and keep both operational. Korean personal accounts also require a verified developer phone number for publishing.
-5. Create the app and complete setup, then run a closed test with at least **12 testers** opted in for **14 consecutive days**. Recruit at least 15 real people for margin. If the active count drops below 12 or a tester opts out, do not credit a non-consecutive interval.
-6. Apply for production access only after the gate is met. Prepare the testing summary, app/target-audience explanation, and production-readiness explanation requested by the application.
+4. Verify the contact email and phone number with the required OTP codes, and keep both operational.
+5. Confirm that the production track is available. If Play Console presents an unexpected account gate, stop and follow the current first-party requirement rather than assuming a personal-account workflow.
 
-Official references: [new personal-account testing](https://support.google.com/googleplay/android-developer/answer/14151465), [device verification](https://support.google.com/googleplay/android-developer/answer/14316361), [developer identity](https://support.google.com/googleplay/android-developer/answer/10841920), and [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756).
+Official references: [device verification](https://support.google.com/googleplay/android-developer/answer/14316361), [developer identity](https://support.google.com/googleplay/android-developer/answer/10841920), and [Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756).
 
 ## Play Console questionnaire answers
 
@@ -48,7 +47,7 @@ Re-confirm every answer against the exact signed candidate before saving it in P
 2. Upload the signed AAB to internal testing, install it on a physical device, and complete the exact QA checklist.
 3. Use the four tracked 1080×1920 screenshots, 512×512 icon, and alpha-free 1024×500 feature graphic only if they still match the signed candidate.
 4. Complete app access, ads, Data safety, target audience, content rating, Health apps declaration, Government apps, Financial features, and Advertising ID forms using the table above.
-5. If the 12 testers / 14 consecutive days gate applies, complete it before requesting production access.
+5. Confirm production-track availability and stop for owner action if Play Console presents any additional account requirement.
 6. Final submission, publication, visibility changes, and production rollout each require fresh owner approval for the exact target.
 
 ## Release QA record
