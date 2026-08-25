@@ -67,8 +67,13 @@ function sanitizeHistoryEntry(value) {
   if (!value || typeof value !== "object") return null;
   const id = validText(value.id);
   const createdAt = validText(value.createdAt);
-  if (!id || !createdAt || !Array.isArray(value.suggestions)) return null;
-  const suggestions = value.suggestions.slice(0, SUGGESTIONS_LIMIT).map(sanitizeSuggestion).filter(Boolean);
+  if (!id || !createdAt || !Number.isFinite(Date.parse(createdAt)) || !Array.isArray(value.suggestions)) return null;
+  const suggestionIds = new Set();
+  const suggestions = value.suggestions.slice(0, SUGGESTIONS_LIMIT).map(sanitizeSuggestion).filter((suggestion) => {
+    if (!suggestion || suggestionIds.has(suggestion.id)) return false;
+    suggestionIds.add(suggestion.id);
+    return true;
+  });
   return { id, createdAt, suggestions };
 }
 
@@ -77,17 +82,30 @@ function sanitizeState(state) {
     ? state.ingredients.slice(0, MAX_INGREDIENTS).map(sanitizeIngredient).filter(Boolean)
     : [];
   const uniqueNames = new Set();
+  const uniqueIds = new Set();
   const deduplicatedIngredients = ingredients.filter((item) => {
     const key = item.name.toLocaleLowerCase("en-US");
-    if (uniqueNames.has(key)) return false;
+    if (uniqueNames.has(key) || uniqueIds.has(item.id)) return false;
     uniqueNames.add(key);
+    uniqueIds.add(item.id);
     return true;
   });
-  const favorites = Array.isArray(state?.favorites)
-    ? [...new Set(state.favorites.slice(0, FAVORITES_LIMIT).map((value) => validText(value)).filter(Boolean))]
-    : [];
+  const historyIds = new Set();
   const history = Array.isArray(state?.history)
     ? state.history.slice(-HISTORY_LIMIT).map(sanitizeHistoryEntry).filter(Boolean)
+      .filter((entry) => {
+        if (historyIds.has(entry.id)) return false;
+        historyIds.add(entry.id);
+        return true;
+      })
+    : [];
+  const suggestionIdCounts = new Map();
+  for (const suggestion of history.flatMap((entry) => entry.suggestions)) {
+    suggestionIdCounts.set(suggestion.id, (suggestionIdCounts.get(suggestion.id) ?? 0) + 1);
+  }
+  const favorites = Array.isArray(state?.favorites)
+    ? [...new Set(state.favorites.slice(0, FAVORITES_LIMIT).map((value) => validText(value)).filter(Boolean))]
+      .filter((id) => suggestionIdCounts.get(id) === 1)
     : [];
   return { ingredients: deduplicatedIngredients, favorites, history };
 }
@@ -102,7 +120,8 @@ export function parseStoredIngredients(raw) {
       id: item.id, name: normalizeName(item.name), urgency: item.urgency, sequence: item.sequence,
     }));
     const names = normalized.map((item) => item.name.toLocaleLowerCase("en-US"));
-    return new Set(names).size === names.length ? normalized : [];
+    const ids = normalized.map((item) => item.id);
+    return new Set(names).size === names.length && new Set(ids).size === ids.length ? normalized : [];
   } catch {
     return [];
   }
@@ -140,6 +159,27 @@ export function loadState(storage, onError = () => {}) {
   catch { onError(); return emptyState(); }
 }
 
+export function accessStorage(scope, onError = () => {}) {
+  try { return scope?.localStorage ?? null; }
+  catch { onError(); return null; }
+}
+
+export function usableSuggestions(suggestions, ingredients, today) {
+  if (!Array.isArray(suggestions) || !Array.isArray(ingredients)) return [];
+  const available = new Set(ingredients.filter((item) => {
+    if (item.expiryDate) return !["expired", "invalid"].includes(getExpiryStatus(item.expiryDate, today));
+    return VALID_URGENCIES.has(item.urgency);
+  }).map((item) => normalizeName(item.name).toLocaleLowerCase("en-US")));
+  return suggestions.filter((suggestion) => Array.isArray(suggestion?.ingredients) &&
+    suggestion.ingredients.every((name) => available.has(normalizeName(name).toLocaleLowerCase("en-US"))));
+}
+
+export function bindSuggestionsToMenu(menuId, suggestions) {
+  const validMenuId = validText(menuId);
+  if (!validMenuId || !Array.isArray(suggestions)) return [];
+  return suggestions.map((suggestion) => ({ ...suggestion, id: `${validMenuId}:${suggestion.id}` }));
+}
+
 export function loadIngredients(storage) {
   try { return parseStoredIngredients(storage?.getItem(STORAGE_KEY)); } catch { return []; }
 }
@@ -167,13 +207,17 @@ function boot() {
   const installButton = document.querySelector("#install-button");
 
   let storageReadBlocked = false;
-  const restored = loadState(window.localStorage, () => { storageReadBlocked = true; });
+  const storage = accessStorage(window, () => { storageReadBlocked = true; });
+  const restored = storage
+    ? loadState(storage, () => { storageReadBlocked = true; })
+    : emptyState();
   let ingredients = restored.ingredients;
   let favorites = restored.favorites;
   let history = restored.history;
   let currentSuggestions = history.at(-1)?.suggestions ?? [];
   let installPrompt;
   let nextSequence = ingredients.reduce((max, item) => Math.max(max, item.sequence + 1), 0);
+  let nextMenuSequence = history.length;
 
   function announce(message, tone = "neutral") {
     status.textContent = message;
@@ -182,7 +226,8 @@ function boot() {
 
   function persist() {
     try {
-      window.localStorage.setItem(STORAGE_KEY, serializeState({ ingredients, favorites, history }));
+      if (!storage) throw new Error("Local storage unavailable");
+      storage.setItem(STORAGE_KEY, serializeState({ ingredients, favorites, history }));
     } catch {
       announce("This browser blocked local saving; changes last only for this session.", "warning");
     }
@@ -245,21 +290,23 @@ function boot() {
   }
 
   function renderSuggestions(items = []) {
-    currentSuggestions = items;
+    const usable = usableSuggestions(items, ingredients);
+    currentSuggestions = usable;
     suggestions.replaceChildren();
-    if (!items.length) {
+    if (!usable.length) {
       const empty = document.createElement("p");
       empty.className = "empty-state";
       empty.textContent = `Add ${MIN_INGREDIENTS}–${MAX_INGREDIENTS} ingredients, then make a menu.`;
       suggestions.append(empty);
       return;
     }
-    items.forEach((item) => suggestions.append(mealCard(item)));
+    usable.forEach((item) => suggestions.append(mealCard(item)));
   }
 
   function renderFavorites() {
     favoritesList.replaceChildren();
-    const known = history.flatMap((entry) => entry.suggestions).filter((item) => favorites.includes(item.id));
+    const known = usableSuggestions(history.flatMap((entry) => entry.suggestions), ingredients)
+      .filter((item) => favorites.includes(item.id));
     const unique = [...new Map(known.map((item) => [item.id, item])).values()];
     if (!unique.length) {
       const empty = document.createElement("p");
@@ -281,12 +328,16 @@ function boot() {
       return;
     }
     [...history].reverse().forEach((entry) => {
+      const usable = usableSuggestions(entry.suggestions, ingredients);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "history-button";
-      button.textContent = `${new Date(entry.createdAt).toLocaleString()} · ${entry.suggestions.map((item) => item.title).join(", ")}`;
+      button.disabled = usable.length === 0;
+      button.textContent = usable.length
+        ? `${new Date(entry.createdAt).toLocaleString()} · ${usable.map((item) => item.title).join(", ")}`
+        : `${new Date(entry.createdAt).toLocaleString()} · unavailable because ingredients changed or expired`;
       button.addEventListener("click", () => {
-        renderSuggestions(entry.suggestions);
+        renderSuggestions(usable);
         document.querySelector("#menu-heading").focus();
       });
       historyList.append(button);
@@ -323,6 +374,8 @@ function boot() {
         persist();
         render();
         renderSuggestions();
+        renderFavorites();
+        renderHistory();
         focusIngredientAfterRemoval(focusId);
         announce(`${item.name} removed.`);
       });
@@ -357,6 +410,8 @@ function boot() {
     persist();
     render();
     renderSuggestions();
+    renderFavorites();
+    renderHistory();
     form.reset();
     nameInput.focus();
     announce(`${name} added.`, "success");
@@ -365,8 +420,9 @@ function boot() {
   suggestButton.addEventListener("click", () => {
     const validation = validateIngredients(ingredients);
     if (!validation.ok) { announce(validation.message, "error"); return; }
-    const generated = generateSuggestions(ingredients);
-    history.push({ id: `menu-${Date.now()}`, createdAt: new Date().toISOString(), suggestions: generated });
+    const menuId = `menu-${Date.now()}-${nextMenuSequence++}`;
+    const generated = bindSuggestionsToMenu(menuId, generateSuggestions(ingredients));
+    history.push({ id: menuId, createdAt: new Date().toISOString(), suggestions: generated });
     history = history.slice(-HISTORY_LIMIT);
     persist();
     renderSuggestions(generated);
@@ -381,6 +437,8 @@ function boot() {
     persist();
     render();
     renderSuggestions();
+    renderFavorites();
+    renderHistory();
     announce("Fridge list cleared.");
     nameInput.focus();
   });
@@ -395,6 +453,14 @@ function boot() {
     await installPrompt.prompt();
     installPrompt = undefined;
     installButton.hidden = true;
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    render();
+    renderSuggestions(currentSuggestions);
+    renderFavorites();
+    renderHistory();
   });
 
   render();

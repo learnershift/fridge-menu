@@ -10,11 +10,14 @@ import {
   STORAGE_KEY,
   loadState,
   loadIngredients,
+  accessStorage,
+  bindSuggestionsToMenu,
   parseStoredIngredients,
   parseStoredState,
   saveIngredients,
   serializeIngredients,
   serializeState,
+  usableSuggestions,
 } from "../app.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -44,7 +47,7 @@ test("v2 local state migrates v1 ingredients and bounds favorites and history", 
     ingredients: [{ id: "one", name: "Kale", expiryDate: "2026-08-02", sequence: 0 }],
     favorites: ["suggestion-1", "suggestion-1"], history,
   }));
-  assert.deepEqual(restored.favorites, ["suggestion-1"]);
+  assert.deepEqual(restored.favorites, [], "favorite IDs without one matching retained suggestion must be dropped");
   assert.equal(restored.history.length, HISTORY_LIMIT);
   assert.equal(restored.history[0].id, "menu-2");
   assert.deepEqual(parseStoredState("broken"), { ingredients: [], favorites: [], history: [] });
@@ -76,6 +79,82 @@ test("state loading and serialization fail closed on blocked or oversized storag
   assert.ok(restored.history[0].suggestions.length <= 3);
   assert.ok(restored.history[0].suggestions[0].ingredients.length <= 8);
   assert.ok(restored.history[0].suggestions[0].method.length <= MAX_STORED_TEXT_LENGTH);
+});
+
+test("browser storage access, duplicate identities, and invalid history fail closed", () => {
+  let accessFailed = false;
+  const blockedWindow = { get localStorage() { throw new DOMException("blocked", "SecurityError"); } };
+  assert.equal(accessStorage(blockedWindow, () => { accessFailed = true; }), null);
+  assert.equal(accessFailed, true);
+
+  const duplicateIngredients = {
+    version: 2,
+    ingredients: [
+      { id: "same", name: "Kale", expiryDate: "2099-01-02", sequence: 0 },
+      { id: "same", name: "Tofu", expiryDate: "2099-01-03", sequence: 1 },
+    ],
+    favorites: [],
+    history: [
+      { id: "history", createdAt: "not-a-date", suggestions: [] },
+      { id: "history", createdAt: "2026-08-25T08:00:00.000Z", suggestions: [] },
+      { id: "history", createdAt: "2026-08-26T08:00:00.000Z", suggestions: [] },
+    ],
+  };
+  const restored = parseStoredState(JSON.stringify(duplicateIngredients));
+  assert.deepEqual(restored.ingredients.map(({ id, name }) => ({ id, name })), [{ id: "same", name: "Kale" }]);
+  assert.deepEqual(restored.history.map((entry) => entry.createdAt), ["2026-08-25T08:00:00.000Z"]);
+
+  const duplicateLegacyIds = JSON.stringify({ version: 1, ingredients: [
+    { id: "same", name: "Kale", urgency: "use-now", sequence: 0 },
+    { id: "same", name: "Tofu", urgency: "stable", sequence: 1 },
+  ] });
+  assert.deepEqual(parseStoredIngredients(duplicateLegacyIds), []);
+});
+
+test("menu and favorite identities stay unique across history entries", () => {
+  const template = { id: "suggestion-1", title: "Skillet", anchor: "Kale", ingredients: ["Kale"], useFirstReason: "First.", method: "Cook." };
+  const bound = bindSuggestionsToMenu("menu-a", [template])[0];
+  assert.equal(bound.id, "menu-a:suggestion-1");
+  assert.equal(bindSuggestionsToMenu("menu-b", [template])[0].id, "menu-b:suggestion-1");
+
+  const validFavorite = parseStoredState(serializeState({
+    ingredients: [{ id: "kale", name: "Kale", expiryDate: "2099-01-02", sequence: 0 }],
+    favorites: [bound.id],
+    history: [{ id: "menu-a", createdAt: "2026-08-25T08:00:00.000Z", suggestions: [bound] }],
+  }));
+  assert.deepEqual(validFavorite.favorites, [bound.id]);
+
+  const restored = parseStoredState(JSON.stringify({
+    version: 2, ingredients: [{ id: "kale", name: "Kale", expiryDate: "2099-01-02", sequence: 0 }],
+    favorites: ["suggestion-1"],
+    history: [
+      { id: "menu-a", createdAt: "2026-08-25T08:00:00.000Z", suggestions: [template] },
+      { id: "menu-b", createdAt: "2026-08-26T08:00:00.000Z", suggestions: [template] },
+    ],
+  }));
+  assert.deepEqual(restored.favorites, [], "ambiguous legacy favorite IDs must fail closed");
+});
+
+test("history and favorites cannot render guidance for removed or expired ingredients", () => {
+  const suggestion = {
+    id: "suggestion-1", title: "Use-first skillet", anchor: "Kale",
+    ingredients: ["Kale", "Tofu", "Rice"], useFirstReason: "Use Kale first.", method: "Cook it.",
+  };
+  const fresh = [
+    { id: "kale", name: "Kale", expiryDate: "2026-08-25", sequence: 0 },
+    { id: "tofu", name: "Tofu", expiryDate: "2026-08-26", sequence: 1 },
+    { id: "rice", name: "Rice", expiryDate: "2026-08-30", sequence: 2 },
+  ];
+  assert.deepEqual(usableSuggestions([suggestion], fresh, "2026-08-25"), [suggestion]);
+  assert.deepEqual(usableSuggestions([suggestion], fresh, "2026-08-27"), [], "expired history guidance must disappear");
+  assert.deepEqual(usableSuggestions([suggestion], fresh.slice(0, 2), "2026-08-25"), [], "removed ingredients must invalidate history guidance");
+});
+
+test("ingredient changes and day rollover revalidate rendered history and favorites", async () => {
+  const app = await read("app.js");
+  assert.match(app, /remove\.addEventListener\("click",[\s\S]*?renderSuggestions\(\);\s*renderFavorites\(\);\s*renderHistory\(\);/);
+  assert.match(app, /clearButton\.addEventListener\("click",[\s\S]*?renderSuggestions\(\);\s*renderFavorites\(\);\s*renderHistory\(\);/);
+  assert.match(app, /document\.addEventListener\("visibilitychange"[\s\S]*?renderSuggestions\(currentSuggestions\);\s*renderFavorites\(\);\s*renderHistory\(\);/);
 });
 
 test("HTML contains semantic accessible pantry favorites history and install controls", async () => {
@@ -186,7 +265,7 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v6"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v7"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
