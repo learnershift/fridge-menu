@@ -12,16 +12,84 @@ export const STORAGE_KEY = "fridge-menu:v1";
 export const STORAGE_VERSION = 1;
 export const STATE_VERSION = 2;
 export const HISTORY_LIMIT = 10;
+export const FAVORITES_LIMIT = HISTORY_LIMIT * 3;
+export const MAX_STORED_TEXT_LENGTH = 512;
+
+const MAX_RAW_STORAGE_LENGTH = 128 * 1024;
+const INGREDIENT_NAME_LIMIT = 48;
+const SUGGESTIONS_LIMIT = 3;
 
 const VALID_URGENCIES = new Set(["use-now", "use-soon", "stable"]);
 const EMPTY_STATE = Object.freeze({ ingredients: [], favorites: [], history: [] });
 
 function isStoredIngredient(value, index) {
   return Boolean(
-    value && typeof value === "object" && typeof value.id === "string" && normalizeName(value.name) &&
+    value && typeof value === "object" && validText(value.id) && validName(value.name) &&
     VALID_URGENCIES.has(value.urgency) && Number.isInteger(value.sequence) && value.sequence >= 0 &&
     value.sequence >= index - MAX_INGREDIENTS,
   );
+}
+
+function validText(value, limit = MAX_STORED_TEXT_LENGTH) {
+  return typeof value === "string" && value.length > 0 && value.length <= limit ? value : null;
+}
+
+function validName(value) {
+  const name = normalizeName(value);
+  return name && name.length <= INGREDIENT_NAME_LIMIT ? name : null;
+}
+
+function sanitizeIngredient(value, index) {
+  if (!value || typeof value !== "object") return null;
+  const id = validText(value.id);
+  const name = validName(value.name);
+  const sequence = Number.isInteger(value.sequence) && value.sequence >= 0 ? value.sequence : index;
+  const expiryDate = typeof value.expiryDate === "string" && getExpiryStatus(value.expiryDate) !== "invalid" ? value.expiryDate : null;
+  const urgency = VALID_URGENCIES.has(value.urgency) ? value.urgency : null;
+  if (!id || !name || (!expiryDate && !urgency)) return null;
+  return expiryDate ? { id, name, expiryDate, sequence } : { id, name, urgency, sequence };
+}
+
+function sanitizeSuggestion(value) {
+  if (!value || typeof value !== "object") return null;
+  const id = validText(value.id);
+  const title = validText(value.title);
+  const anchor = validText(value.anchor, INGREDIENT_NAME_LIMIT);
+  const useFirstReason = validText(value.useFirstReason);
+  const method = validText(value.method);
+  if (!id || !title || !anchor || !useFirstReason || !method || !Array.isArray(value.ingredients)) return null;
+  const ingredients = value.ingredients.slice(0, MAX_INGREDIENTS).map(validName).filter(Boolean);
+  if (!ingredients.length) return null;
+  return { id, title, anchor, ingredients, useFirstReason, method };
+}
+
+function sanitizeHistoryEntry(value) {
+  if (!value || typeof value !== "object") return null;
+  const id = validText(value.id);
+  const createdAt = validText(value.createdAt);
+  if (!id || !createdAt || !Array.isArray(value.suggestions)) return null;
+  const suggestions = value.suggestions.slice(0, SUGGESTIONS_LIMIT).map(sanitizeSuggestion).filter(Boolean);
+  return { id, createdAt, suggestions };
+}
+
+function sanitizeState(state) {
+  const ingredients = Array.isArray(state?.ingredients)
+    ? state.ingredients.slice(0, MAX_INGREDIENTS).map(sanitizeIngredient).filter(Boolean)
+    : [];
+  const uniqueNames = new Set();
+  const deduplicatedIngredients = ingredients.filter((item) => {
+    const key = item.name.toLocaleLowerCase("en-US");
+    if (uniqueNames.has(key)) return false;
+    uniqueNames.add(key);
+    return true;
+  });
+  const favorites = Array.isArray(state?.favorites)
+    ? [...new Set(state.favorites.slice(0, FAVORITES_LIMIT).map((value) => validText(value)).filter(Boolean))]
+    : [];
+  const history = Array.isArray(state?.history)
+    ? state.history.slice(-HISTORY_LIMIT).map(sanitizeHistoryEntry).filter(Boolean)
+    : [];
+  return { ingredients: deduplicatedIngredients, favorites, history };
 }
 
 export function parseStoredIngredients(raw) {
@@ -50,35 +118,26 @@ function emptyState() {
 
 export function parseStoredState(raw) {
   if (!raw) return emptyState();
+  if (typeof raw !== "string" || raw.length > MAX_RAW_STORAGE_LENGTH) return emptyState();
   try {
     const payload = JSON.parse(raw);
     if (payload?.version === STORAGE_VERSION) {
       return { ingredients: parseStoredIngredients(raw), favorites: [], history: [] };
     }
     if (payload?.version !== STATE_VERSION || !Array.isArray(payload.ingredients)) return emptyState();
-    const ingredients = payload.ingredients
-      .filter((item) => item && typeof item.id === "string" && normalizeName(item.name) && typeof item.expiryDate === "string" && Number.isInteger(item.sequence))
-      .slice(0, MAX_INGREDIENTS)
-      .map((item) => ({ id: item.id, name: normalizeName(item.name), expiryDate: item.expiryDate, sequence: item.sequence }));
-    const favorites = Array.isArray(payload.favorites)
-      ? [...new Set(payload.favorites.filter((value) => typeof value === "string"))]
-      : [];
-    const history = Array.isArray(payload.history)
-      ? payload.history.filter((entry) => entry && typeof entry.id === "string" && Array.isArray(entry.suggestions)).slice(-HISTORY_LIMIT)
-      : [];
-    return { ingredients, favorites, history };
+    return sanitizeState(payload);
   } catch {
     return emptyState();
   }
 }
 
 export function serializeState(state) {
-  return JSON.stringify({
-    version: STATE_VERSION,
-    ingredients: Array.isArray(state?.ingredients) ? state.ingredients.slice(0, MAX_INGREDIENTS) : [],
-    favorites: [...new Set(Array.isArray(state?.favorites) ? state.favorites.filter((value) => typeof value === "string") : [])],
-    history: Array.isArray(state?.history) ? state.history.slice(-HISTORY_LIMIT) : [],
-  });
+  return JSON.stringify({ version: STATE_VERSION, ...sanitizeState(state) });
+}
+
+export function loadState(storage, onError = () => {}) {
+  try { return parseStoredState(storage?.getItem(STORAGE_KEY)); }
+  catch { onError(); return emptyState(); }
 }
 
 export function loadIngredients(storage) {
@@ -107,7 +166,8 @@ function boot() {
   const useFirst = document.querySelector("#use-first-preview");
   const installButton = document.querySelector("#install-button");
 
-  const restored = parseStoredState(window.localStorage.getItem(STORAGE_KEY));
+  let storageReadBlocked = false;
+  const restored = loadState(window.localStorage, () => { storageReadBlocked = true; });
   let ingredients = restored.ingredients;
   let favorites = restored.favorites;
   let history = restored.history;
@@ -231,7 +291,9 @@ function boot() {
       ingredientName.textContent = item.name;
       const expiry = document.createElement("span");
       expiry.className = "urgency-label";
-      expiry.textContent = `${item.urgency.replace("-", " ")} · ${item.expiryDate}`;
+      expiry.textContent = item.expiryDate
+        ? `${item.urgency.replace("-", " ")} · ${item.expiryDate}`
+        : `${item.urgency.replace("-", " ")} · legacy priority`;
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "remove-button";
@@ -318,7 +380,10 @@ function boot() {
   renderSuggestions(currentSuggestions);
   renderFavorites();
   renderHistory();
-  announce(ingredients.length ? `Restored ${ingredients.length} locally saved ingredients.` : "Ready for your ingredients.");
+  announce(storageReadBlocked
+    ? "This browser blocked local storage; changes last only for this session."
+    : ingredients.length ? `Restored ${ingredients.length} locally saved ingredients.` : "Ready for your ingredients.",
+  storageReadBlocked ? "warning" : "neutral");
 
   if ("serviceWorker" in navigator && window.isSecureContext && location.protocol !== "file:") {
     navigator.serviceWorker.register("./service-worker.js").catch(() => announce("Offline caching is unavailable in this browser.", "warning"));

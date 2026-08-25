@@ -33,7 +33,7 @@ Re-confirm every answer against the exact signed candidate before saving it in P
 | App access | All functionality is available without special access | No account, login, subscription, or restricted flow |
 | Ads declaration | No | Advertising UI and SDK are absent |
 | Data safety | No data collected or shared | Zero Android permissions, no INTERNET permission, no third-party dependencies, local WebView storage only |
-| Data deletion | Clear list, clear app storage, or uninstall | No server copy exists |
+| Data deletion | Clear list removes ingredients only; clear the app or browser storage, or uninstall, to remove ingredients, favorites, and history | No server copy exists |
 | Content rating | No violence, sexual content, gambling, drugs, or user-generated content | Deterministic local cooking directions only |
 | Target audience | Not directed to children | Product copy and privacy policy state this boundary |
 | Health apps declaration | `My app doesn't provide any health features` | No nutrition data, diet/weight goal, health tracking, medical claim, or health data; meal output is generic cooking-direction text. Re-check the current form because Google's examples include some meal-planning tools |

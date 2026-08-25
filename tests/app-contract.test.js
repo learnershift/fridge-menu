@@ -4,8 +4,11 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
+  FAVORITES_LIMIT,
   HISTORY_LIMIT,
+  MAX_STORED_TEXT_LENGTH,
   STORAGE_KEY,
+  loadState,
   loadIngredients,
   parseStoredIngredients,
   parseStoredState,
@@ -33,7 +36,9 @@ test("versioned local persistence round-trips and malformed data fails closed", 
 
 test("v2 local state migrates v1 ingredients and bounds favorites and history", () => {
   const legacy = JSON.stringify({ version: 1, ingredients: [{ id: "one", name: "Kale", urgency: "use-now", sequence: 0 }] });
-  assert.deepEqual(parseStoredState(legacy), { ingredients: [{ id: "one", name: "Kale", urgency: "use-now", sequence: 0 }], favorites: [], history: [] });
+  const migrated = parseStoredState(legacy);
+  assert.deepEqual(migrated, { ingredients: [{ id: "one", name: "Kale", urgency: "use-now", sequence: 0 }], favorites: [], history: [] });
+  assert.deepEqual(parseStoredState(serializeState(migrated)), migrated, "v1 ingredients must survive the first v2 save and reload");
   const history = Array.from({ length: HISTORY_LIMIT + 2 }, (_, index) => ({ id: `menu-${index}`, createdAt: "2026-08-01T00:00:00.000Z", suggestions: [] }));
   const restored = parseStoredState(serializeState({
     ingredients: [{ id: "one", name: "Kale", expiryDate: "2026-08-02", sequence: 0 }],
@@ -43,6 +48,34 @@ test("v2 local state migrates v1 ingredients and bounds favorites and history", 
   assert.equal(restored.history.length, HISTORY_LIMIT);
   assert.equal(restored.history[0].id, "menu-2");
   assert.deepEqual(parseStoredState("broken"), { ingredients: [], favorites: [], history: [] });
+});
+
+test("state loading and serialization fail closed on blocked or oversized storage", () => {
+  assert.deepEqual(loadState({ getItem() { throw new Error("blocked"); } }), { ingredients: [], favorites: [], history: [] });
+
+  const long = "x".repeat(MAX_STORED_TEXT_LENGTH + 50);
+  const oversized = {
+    ingredients: [{ id: long, name: long, expiryDate: "2026-08-30", sequence: 0 }],
+    favorites: Array.from({ length: FAVORITES_LIMIT + 10 }, (_, index) => `favorite-${index}`),
+    history: [{
+      id: "history-1",
+      createdAt: "2026-08-25T00:00:00.000Z",
+      suggestions: Array.from({ length: 20 }, (_, index) => ({
+        id: `suggestion-${index}`,
+        title: `Suggestion ${index}`,
+        anchor: "Kale",
+        ingredients: Array.from({ length: 20 }, (_, ingredientIndex) => `item-${ingredientIndex}`),
+        useFirstReason: "Use this first.",
+        method: "Cook until ready.",
+      })),
+    }],
+  };
+  const restored = parseStoredState(serializeState(oversized));
+  assert.deepEqual(restored.ingredients, [], "oversized ingredient records must be dropped rather than silently truncated");
+  assert.ok(restored.favorites.length <= FAVORITES_LIMIT);
+  assert.ok(restored.history[0].suggestions.length <= 3);
+  assert.ok(restored.history[0].suggestions[0].ingredients.length <= 8);
+  assert.ok(restored.history[0].suggestions[0].method.length <= MAX_STORED_TEXT_LENGTH);
 });
 
 test("HTML contains semantic accessible pantry favorites history and install controls", async () => {
@@ -67,6 +100,10 @@ test("privacy policy is available in-app and keeps owner-only identity values ex
     assert.match(policy, new RegExp(`OWNER_REQUIRED:${marker}`));
   }
   assert.match(handoff, /Owner-supplied privacy values/);
+  for (const document of [html, policy, handoff]) {
+    assert.match(document, /Clear list[^.]*ingredients only/i);
+    assert.match(document, /clear (?:the )?app or browser storage[^.]*favorites[^.]*history/i);
+  }
 });
 
 test("owner handoff covers current Play gates, questionnaire answers, and future ad disclosure coupling", async () => {
@@ -126,7 +163,7 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v4"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v5"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {

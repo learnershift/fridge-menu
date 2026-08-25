@@ -12,7 +12,7 @@ Fridge Menu has no account, analytics, advertising SDK, tracking, or remote API.
 
 ## Data retention and deletion
 
-Local data remains on your device until you use Clear list, clear the app or browser storage, or uninstall the app. The publisher does not receive the data and has no server copy to retain, sell, disclose, or delete.
+Clear list removes ingredients only. Clear the app or browser storage, or uninstall the app, to remove ingredients, favorites, and history. The publisher does not receive the data and has no server copy to retain, sell, disclose, or delete.
 
 ## Your privacy rights
 
