@@ -4,11 +4,23 @@ import { spawnSync } from "node:child_process";
 
 const pass = (condition) => condition ? "PASS" : "FAIL";
 
+function foldStringConcatenations(source = "") {
+  let folded = String(source);
+  const pattern = /(["'])([^"'\r\n]*)\1\s*\+\s*(["'])([^"'\r\n]*)\3/g;
+  while (pattern.test(folded)) folded = folded.replace(pattern, (_, quote, left, _rightQuote, right) => `${quote}${left}${right}${quote}`);
+  return folded;
+}
+
+function hasRemoteReference(source) {
+  const folded = foldStringConcatenations(source);
+  return /https?:\/\//i.test(folded) || /["'(]\s*\/\/[a-z0-9]/i.test(folded);
+}
+
 export function computeStaticReleaseChecks({ css, androidManifest, mainActivity, serviceWorker }) {
   return {
-    accessibility: pass(/\.remove-button\s*\{[^}]*min-width:\s*2\.75rem;[^}]*min-height:\s*2\.75rem;/.test(css)),
-    privacy_security: pass(!/uses-permission/i.test(androidManifest) && !/https?:\/\//i.test(mainActivity) && !/addJavascriptInterface/.test(mainActivity)),
-    offline: pass(!/https?:\/\//i.test(serviceWorker) && /file:\/\/\/android_asset\/pwa\/index\.html/.test(mainActivity)),
+    touch_target_static: pass(/\.remove-button\s*\{[^}]*min-width:\s*2\.75rem;[^}]*min-height:\s*2\.75rem;/.test(css)),
+    privacy_security_static: pass(!/uses-permission/i.test(androidManifest) && !hasRemoteReference(mainActivity) && !/addJavascriptInterface/.test(mainActivity)),
+    offline_static: pass(!hasRemoteReference(serviceWorker) && /file:\/\/\/android_asset\/pwa\/index\.html/.test(mainActivity)),
   };
 }
 

@@ -207,13 +207,13 @@ test("package has no dependency or install surface", async () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
-  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:release"]);
+  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:aab-repro", "verify:release"]);
 });
 
 test("verify:release builds the AAB before manifest and Android evidence", async () => {
   const pkg = JSON.parse(await read("package.json"));
   const steps = pkg.scripts["verify:release"].split(" && ");
-  const aab = steps.indexOf("npm run android:aab");
+  const aab = steps.indexOf("npm run verify:aab-repro");
 
   assert.notEqual(aab, -1, "verify:release must produce the AAB");
   assert.ok(aab < steps.indexOf("node scripts/release-manifest.mjs"));
@@ -222,17 +222,18 @@ test("verify:release builds the AAB before manifest and Android evidence", async
 
 test("release checks are computed from source files and executed commands", async () => {
   const { computeStaticReleaseChecks } = await import("../scripts/release-checks.mjs");
-  const passing = computeStaticReleaseChecks({
+  const fixture = {
     css: ".remove-button { min-width: 2.75rem; min-height: 2.75rem; }",
     androidManifest: "<manifest><application /></manifest>",
     mainActivity: 'view.loadUrl("file:///android_asset/pwa/index.html");',
     serviceWorker: 'const files = ["./index.html"];',
     adBoundary: "networkRequests: false; sdkLoaded: false; productionIdentifier: null;",
-  });
-  assert.deepEqual(passing, { accessibility: "PASS", privacy_security: "PASS", offline: "PASS" });
-  assert.equal(computeStaticReleaseChecks({ ...passing, css: ".remove-button { padding: 0; }" }).accessibility, "FAIL");
-  assert.equal(computeStaticReleaseChecks({ ...passing, androidManifest: "<uses-permission />" }).privacy_security, "FAIL");
-  assert.equal(computeStaticReleaseChecks({ ...passing, serviceWorker: 'fetch("https://example.test")' }).offline, "FAIL");
+  };
+  const passing = computeStaticReleaseChecks(fixture);
+  assert.deepEqual(passing, { touch_target_static: "PASS", privacy_security_static: "PASS", offline_static: "PASS" });
+  assert.equal(computeStaticReleaseChecks({ ...fixture, css: ".remove-button { padding: 0; }" }).touch_target_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, androidManifest: "<uses-permission />" }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'fetch("https://example.test")' }).offline_static, "FAIL");
 });
 
 test("Android evidence generator binds computed release checks and identity to the current artifact", async () => {
@@ -241,10 +242,12 @@ test("Android evidence generator binds computed release checks and identity to t
 
   assert.equal(pkg.scripts["android:evidence"], "node scripts/android-evidence.mjs");
   assert.match(pkg.scripts["verify:release"], /android:evidence/);
-  assert.match(generator, /android-evidence-v1/);
-  assert.match(generator, /com\.learnershift\.fridgemenu/);
-  assert.match(generator, /computeReleaseChecks/);
+  assert.match(generator, /android-evidence-v2/);
+  assert.match(generator, /inspectAabArtifact/);
+  assert.match(generator, /assertEvidenceAgreement/);
   assert.match(generator, /inspectAabSigning/);
+  assert.match(generator, /release_manifest_sha256/);
+  assert.match(generator, /submission_readiness/);
   assert.doesNotMatch(generator, /tests: "PASS"|build: "PASS"|accessibility: "PASS"|privacy_security: "PASS"|offline: "PASS"/);
   for (const manualCheck of ["physical_device", "offline_relaunch", "talkback"]) {
     assert.match(generator, new RegExp(`${manualCheck}: \\"OWNER_REQUIRED\\"`));
@@ -271,6 +274,7 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   const gitignore = await read(".gitignore");
 
   assert.equal(pkg.scripts["android:aab"], "node scripts/android-package.mjs");
+  assert.equal(pkg.scripts["verify:aab-repro"], "node scripts/verify-aab-repro.mjs");
   assert.equal(pkg.scripts["release:manifest"], "node scripts/release-manifest.mjs");
   assert.equal(pkg.scripts["store-assets"], "node scripts/generate-store-assets.mjs");
   assert.equal(pkg.scripts["store-screenshot"], "node scripts/capture-store-assets.mjs");
@@ -305,7 +309,7 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   }
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run build/);
-  assert.match(workflow, /release:manifest/);
+  assert.doesNotMatch(workflow, /npm run release:manifest|upload-artifact/);
   assert.match(privacy, /no account, analytics, advertising SDK, tracking, or remote API/i);
   assert.match(listing, /Short description/);
   assert.match(dataSafety, /No data collected or shared/);

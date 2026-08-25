@@ -19,9 +19,5 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run store-assets && git diff --exit-code
-      - run: npm run release:manifest
-      - uses: actions/upload-artifact@v4
-        with:
-          name: fridge-menu-release-manifest
-          path: release/artifacts/release-manifest.json
-          if-no-files-found: error
+      # Android release evidence is intentionally not emitted in this Node-only job.
+      # `npm run verify:release` requires the pinned local Android toolchain and a real AAB.
