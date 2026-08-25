@@ -188,6 +188,19 @@ function boot() {
     }
   }
 
+  function focusFavoriteButton(suggestionId) {
+    const button = [...document.querySelectorAll(".favorite-button")]
+      .find((candidate) => candidate.dataset.suggestionId === suggestionId);
+    (button ?? document.querySelector("#favorites-heading")).focus();
+  }
+
+  function focusIngredientAfterRemoval(ingredientId) {
+    if (!ingredientId) { nameInput.focus(); return; }
+    const row = [...list.querySelectorAll(".ingredient-item")]
+      .find((candidate) => candidate.dataset.ingredientId === ingredientId);
+    (row?.querySelector(".remove-button") ?? nameInput).focus();
+  }
+
   function mealCard(suggestion, favoriteEnabled = true) {
     const card = document.createElement("article");
     card.className = "meal-card";
@@ -213,13 +226,16 @@ function boot() {
       favorite.type = "button";
       favorite.className = "button button--quiet favorite-button";
       const active = favorites.includes(suggestion.id);
+      favorite.dataset.suggestionId = suggestion.id;
       favorite.textContent = active ? "Remove favorite" : "Favorite";
       favorite.setAttribute("aria-pressed", String(active));
+      favorite.setAttribute("aria-label", `${active ? "Remove" : "Add"} ${suggestion.title} ${active ? "from" : "to"} favorites`);
       favorite.addEventListener("click", () => {
         favorites = active ? favorites.filter((id) => id !== suggestion.id) : [...favorites, suggestion.id];
         persist();
         renderSuggestions(currentSuggestions);
         renderFavorites();
+        focusFavoriteButton(suggestion.id);
         announce(active ? "Favorite removed." : "Meal idea favorited.", "success");
       });
       content.append(favorite);
@@ -283,6 +299,7 @@ function boot() {
     for (const item of ordered) {
       const row = document.createElement("li");
       row.className = `ingredient-item ingredient-item--${item.urgency}`;
+      row.dataset.ingredientId = item.id;
       const dot = document.createElement("span");
       dot.className = `urgency-dot urgency-dot--${item.urgency}`;
       dot.setAttribute("aria-hidden", "true");
@@ -300,16 +317,20 @@ function boot() {
       remove.textContent = "Remove";
       remove.setAttribute("aria-label", `Remove ${item.name}`);
       remove.addEventListener("click", () => {
+        const position = ordered.findIndex((candidate) => candidate.id === item.id);
+        const focusId = ordered[position + 1]?.id ?? ordered[position - 1]?.id;
         ingredients = ingredients.filter((candidate) => candidate.id !== item.id);
         persist();
         render();
         renderSuggestions();
+        focusIngredientAfterRemoval(focusId);
         announce(`${item.name} removed.`);
       });
       row.append(dot, ingredientName, expiry, remove);
       list.append(row);
     }
     count.textContent = `${ingredients.length} / ${MAX_INGREDIENTS}`;
+    count.setAttribute("aria-label", `Ingredient count: ${ingredients.length} of ${MAX_INGREDIENTS}`);
     suggestButton.disabled = ingredients.length < MIN_INGREDIENTS;
     clearButton.disabled = ingredients.length === 0;
     nameInput.disabled = ingredients.length >= MAX_INGREDIENTS;

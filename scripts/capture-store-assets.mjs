@@ -8,7 +8,7 @@ const outputDir = resolve(root, "release/captures");
 const url = process.env.FRIDGE_MENU_CAPTURE_URL || "http://127.0.0.1:4173";
 const captures = [
   { name: "01-empty-home", action: "window.scrollTo(0, 0)" },
-  { name: "02-use-first-list", action: 'document.querySelector("#fridge-heading").scrollIntoView({ block: "start" })' },
+  { name: "02-use-first-list", action: 'document.querySelector("#ingredient-expiry").value = "2099-01-02"; document.querySelector("#fridge-heading").scrollIntoView({ block: "start" })' },
   { name: "03-menu-results", action: 'document.querySelector("#suggest-button").click(); document.querySelector("#menu-heading").scrollIntoView({ block: "start" })' },
   { name: "04-favorites-history", action: 'document.querySelector("#suggest-button").click(); document.querySelector(".favorite-button").click(); document.querySelector("#favorites-heading").scrollIntoView({ block: "start" })' },
 ];
@@ -37,7 +37,7 @@ if (!chrome) throw new Error("Set FRIDGE_MENU_CHROME_BIN to an already installed
 try { if (!(await fetch(url)).ok) throw new Error(); } catch { throw new Error("Start the local app first or set FRIDGE_MENU_CAPTURE_URL."); }
 
 const profile = await mkdtemp(join(tmpdir(), "fridge-menu-capture-"));
-const browser = spawn(chrome, ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+const browser = spawn(chrome, ["--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--lang=en-US", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
 
 function devtoolsPort() {
   return new Promise((resolvePort, reject) => {
@@ -92,6 +92,18 @@ try {
   const protocol = cdp(socket);
   await protocol.call("Page.enable");
   await protocol.call("Runtime.enable");
+  await protocol.call("Emulation.setLocaleOverride", { locale: "en-US" });
+  await protocol.call("Emulation.setTimezoneOverride", { timezoneId: "UTC" });
+  await protocol.call("Page.addScriptToEvaluateOnNewDocument", { source: `
+    {
+      const fixedTime = Date.parse("2026-08-25T08:00:00.000Z");
+      const NativeDate = Date;
+      globalThis.Date = class FixedDate extends NativeDate {
+        constructor(...args) { super(...(args.length ? args : [fixedTime])); }
+        static now() { return fixedTime; }
+      };
+    }
+  ` });
   await protocol.call("Emulation.setDeviceMetricsOverride", { width: 360, height: 640, deviceScaleFactor: 3, mobile: true });
   let loaded = protocol.event("Page.loadEventFired");
   await protocol.call("Page.navigate", { url });

@@ -84,6 +84,9 @@ test("HTML contains semantic accessible pantry favorites history and install con
     assert.ok(html.includes(required), `missing ${required}`);
   }
   assert.doesNotMatch(html, /<script[^>]+https?:|<link[^>]+https?:/i);
+  assert.match(html, /Content-Security-Policy/);
+  assert.match(html, /connect-src 'none'/);
+  assert.match(html, /aria-label="Ingredient count: 0 of 8"/);
 });
 
 test("privacy policy is available in-app and keeps owner-only identity values explicit", async () => {
@@ -132,6 +135,26 @@ test("responsive and reduced-motion rules are present", async () => {
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.ingredient-item \{ grid-template-columns: auto minmax\(0, 1fr\) auto; \}/);
 });
 
+test("release UI color tokens meet WCAG text and non-text contrast floors", async () => {
+  const css = await read("styles.css");
+  const token = (name) => css.match(new RegExp(`--${name}:\\s*#([0-9a-f]{6})`, "i"))?.[1];
+  const luminance = (hex) => {
+    const channels = hex.match(/../g).map((value) => Number.parseInt(value, 16) / 255)
+      .map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  };
+  const ratio = (foreground, background) => {
+    const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+    return (values[0] + 0.05) / (values[1] + 0.05);
+  };
+
+  assert.ok(ratio(token("coral"), "fbf8ef") >= 4.5, "coral hero text must meet normal-text contrast");
+  const placeholder = css.match(/input::placeholder\s*\{[^}]*color:\s*#([0-9a-f]{6})/i)?.[1];
+  const border = css.match(/input, select\s*\{[^}]*border:\s*1px solid #([0-9a-f]{6})/i)?.[1];
+  assert.ok(ratio(placeholder, "ffffff") >= 4.5, "placeholder text must meet text contrast");
+  assert.ok(ratio(border, "ffffff") >= 3, "input boundary must meet non-text contrast");
+});
+
 test("remove control guarantees a 44 by 44 pixel touch target", async () => {
   const css = await read("styles.css");
   assert.match(css, /\.remove-button\s*\{[^}]*min-width:\s*2\.75rem;[^}]*min-height:\s*2\.75rem;/);
@@ -163,7 +186,7 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v5"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v6"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
@@ -183,11 +206,30 @@ test("Android shell handles system insets, WebView history, rotation, and file-s
   assert.match(manifest, /android:configChanges="orientation\|screenSize\|screenLayout\|keyboardHidden\|uiMode"/);
   assert.match(activity, /private WebView webView;/);
   assert.match(activity, /setOnApplyWindowInsetsListener/);
+  assert.match(activity, /WindowInsets\.Type\.displayCutout\(\)/);
   assert.match(activity, /webView\.canGoBack\(\)/);
+  assert.match(activity, /APP_ORIGIN/);
+  assert.match(activity, /isAllowedAppUrl/);
+  assert.match(activity, /shouldOverrideUrlLoading/);
+  assert.match(activity, /shouldInterceptRequest/);
+  assert.match(activity, /registerOnBackInvokedCallback/);
+  assert.match(activity, /unregisterOnBackInvokedCallback/);
+  assert.match(activity, /syncBackCallback/);
+  assert.doesNotMatch(activity, /navigateBackOrFinish/);
   assert.match(activity, /setUseWideViewPort\(true\)/);
   assert.match(activity, /setLoadWithOverviewMode\(true\)/);
   assert.match(activity, /setAllowFileAccessFromFileURLs\(false\)/);
   assert.match(activity, /setAllowUniversalAccessFromFileURLs\(false\)/);
+});
+
+test("rerendered controls restore focus and expose changing state in accessible names", async () => {
+  const app = await read("app.js");
+  assert.match(app, /favorite\.dataset\.suggestionId = suggestion\.id/);
+  assert.match(app, /favorite\.setAttribute\("aria-label"/);
+  assert.match(app, /focusFavoriteButton\(suggestion\.id\)/);
+  assert.match(app, /row\.dataset\.ingredientId = item\.id/);
+  assert.match(app, /focusIngredientAfterRemoval/);
+  assert.match(app, /count\.setAttribute\("aria-label", `Ingredient count: \$\{ingredients\.length\} of \$\{MAX_INGREDIENTS\}`\)/);
 });
 
 test("user values are rendered with textContent and browser workflow persists all local state", async () => {
@@ -303,6 +345,12 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(storeAssets, /deflateSync/);
   assert.match(storeAssets, /1024/);
   assert.match(capture, /--headless/);
+  assert.match(capture, /--lang=en-US/);
+  assert.match(capture, /Emulation\.setLocaleOverride/);
+  assert.match(capture, /Emulation\.setTimezoneOverride/);
+  assert.match(capture, /Page\.addScriptToEvaluateOnNewDocument/);
+  assert.match(capture, /2026-08-25T08:00:00\.000Z/);
+  assert.match(capture, /ingredient-expiry[^\n]*2099-01-02/);
   assert.match(capture, /FRIDGE_MENU_CHROME_BIN/);
   for (const name of ["01-empty-home", "02-use-first-list", "03-menu-results", "04-favorites-history"]) {
     assert.match(capture, new RegExp(name));
@@ -326,6 +374,24 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(qaChecklist, /app-release\.aab/);
   assert.match(qaChecklist, /com\.learnershift\.fridgemenu/);
   assert.match(qaChecklist, /Do not sign, upload, submit, publish, or launch/i);
+});
+
+test("owner handoff is fail-closed for unresolved declarations, approvals, testing, and first-release recovery", async () => {
+  const [handoff, qa] = await Promise.all([read("release/OWNER-HANDOFF.md"), read("release/QA-CHECKLIST.md")]);
+  for (const required of [
+    "OWNER_REQUIRED:HEALTH_APPS_DECLARATION", "Play App Signing", "upload key", "zero OWNER_REQUIRED markers",
+    "tester list", "opt-in URL", "matching Google account", "delivered version", "country availability",
+    "target track", "Git SHA", "AAB SHA-256", "approver", "timestamp", "authority evidence ID",
+  ]) assert.match(handoff, new RegExp(required, "i"), `handoff missing fail-closed field: ${required}`);
+  for (const separateApproval of ["signing", "internal-test upload", "production submission", "publication"]) {
+    assert.match(handoff, new RegExp(separateApproval, "i"), `handoff missing separate approval: ${separateApproval}`);
+  }
+  assert.match(qa, /LOCAL_CHROME_SIMULATION/);
+  assert.match(qa, /withdraw[^.]*before publication/i);
+  assert.match(qa, /fix-forward[^.]*higher versionCode/i);
+  for (const field of ["Tester:", "Device model:", "Android version:", "Result: PASS\/FAIL", "Evidence path:"]) {
+    assert.match(qa, new RegExp(field, "i"), `QA record missing ${field}`);
+  }
 });
 
 test("GitHub Pages publication is manual-only and deploys only the freshly built dist artifact", async () => {
@@ -353,6 +419,20 @@ test("Android release shell has a launcher icon and remains offline with no perm
   assert.match(activity, /file:\/\/\/android_asset\/pwa\/index\.html/);
   assert.doesNotMatch(activity, /https?:\/\//i);
   assert.match(icon, /<adaptive-icon/);
+});
+
+test("Android launcher artwork uses the canonical bowl and leaf palette instead of the old lettermark", async () => {
+  const [canonical, foreground, legacy, round] = await Promise.all([
+    read("icon.svg"), read("android/app/src/main/res/drawable/ic_launcher_foreground.xml"),
+    read("android/app/src/main/res/mipmap/ic_launcher.xml"), read("android/app/src/main/res/mipmap/ic_launcher_round.xml"),
+  ]);
+  for (const color of ["E7A64B", "2F7D63", "173F35"]) {
+    assert.match(canonical.toUpperCase(), new RegExp(color));
+    assert.match(foreground.toUpperCase(), new RegExp(color));
+    assert.match(legacy.toUpperCase(), new RegExp(color));
+    assert.match(round.toUpperCase(), new RegExp(color));
+  }
+  assert.doesNotMatch(foreground, /#E9F46A/i);
 });
 
 test("Play upload icon is a 512px PNG derived from the canonical app artwork", async () => {

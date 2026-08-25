@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#173f35">
   <meta name="description" content="Turn the ingredients you already have into deterministic use-first meal ideas.">
   <title>Fridge Menu — use what matters first</title>
@@ -40,7 +41,7 @@
             <p class="eyebrow">Step 1</p>
             <h2 id="fridge-heading">Build your fridge list</h2>
           </div>
-          <span id="ingredient-count" class="count-badge" aria-label="Ingredient count">0 / 8</span>
+          <span id="ingredient-count" class="count-badge" aria-label="Ingredient count: 0 of 8">0 / 8</span>
         </div>
 
         <form id="ingredient-form" class="ingredient-form" novalidate>
@@ -83,7 +84,7 @@
 
     <div class="workspace secondary-workspace">
       <section class="panel" aria-labelledby="favorites-heading">
-        <div class="section-heading"><div><p class="eyebrow">Saved locally</p><h2 id="favorites-heading">Favorites</h2></div></div>
+        <div class="section-heading"><div><p class="eyebrow">Saved locally</p><h2 id="favorites-heading" tabindex="-1">Favorites</h2></div></div>
         <div id="favorites-list" class="suggestions"><p class="empty-state">Favorite a meal idea to keep it here.</p></div>
       </section>
       <section class="panel" aria-labelledby="history-heading">
