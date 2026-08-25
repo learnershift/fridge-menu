@@ -35,6 +35,7 @@ function validText(value, limit = MAX_STORED_TEXT_LENGTH) {
 }
 
 function validName(value) {
+  if (typeof value !== "string") return null;
   const name = normalizeName(value);
   return name && name.length <= INGREDIENT_NAME_LIMIT ? name : null;
 }
@@ -186,7 +187,8 @@ export function loadIngredients(storage) {
 
 export function saveIngredients(storage, ingredients) {
   try {
-    storage?.setItem(STORAGE_KEY, serializeIngredients(ingredients));
+    if (!storage || typeof storage.setItem !== "function") return false;
+    storage.setItem(STORAGE_KEY, serializeIngredients(ingredients));
     return true;
   } catch { return false; }
 }

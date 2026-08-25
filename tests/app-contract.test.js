@@ -109,6 +109,20 @@ test("browser storage access, duplicate identities, and invalid history fail clo
     { id: "same", name: "Tofu", urgency: "stable", sequence: 1 },
   ] });
   assert.deepEqual(parseStoredIngredients(duplicateLegacyIds), []);
+  assert.equal(saveIngredients(null, [{ id: "one", name: "Kale", urgency: "use-now", sequence: 0 }]), false);
+
+  const objectNames = JSON.stringify({
+    version: 2,
+    ingredients: [{ id: "object", name: { coerces: true }, expiryDate: "2099-01-02", sequence: 0 }],
+    favorites: [],
+    history: [{
+      id: "history-object", createdAt: "2026-08-25T08:00:00.000Z",
+      suggestions: [{ id: "suggestion-object", title: "Bad", anchor: "Kale", ingredients: [{ coerces: true }], useFirstReason: "Bad.", method: "Bad." }],
+    }],
+  });
+  const objectState = parseStoredState(objectNames);
+  assert.deepEqual(objectState.ingredients, []);
+  assert.deepEqual(objectState.history[0].suggestions, []);
 });
 
 test("menu and favorite identities stay unique across history entries", () => {
@@ -265,7 +279,7 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v7"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v8"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
