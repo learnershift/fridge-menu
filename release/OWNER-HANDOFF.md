@@ -17,7 +17,7 @@
 ## Account and production-track gates (owner only)
 
 1. Account type is confirmed as an **organization account** by the owner on 2026-08-25.
-2. Check only the current developer identity status. If Play Console requests remediation, complete the organization verification using the matching D-U-N-S number and business documents before submission.
+2. Check only the current developer identity status. If Google Play Console requests remediation, complete the organization verification using the matching D-U-N-S number and business documents before submission.
 3. Complete device verification when Play Console shows the task: use the Play Console mobile app and its QR flow on a non-rooted physical Android 10+ device while signed in as the account owner.
 4. Verify the contact email and phone number with the required OTP codes, and keep both operational.
 5. Confirm that the production track is available. If Play Console presents an unexpected account gate, stop and follow the current first-party requirement rather than assuming a personal-account workflow.
