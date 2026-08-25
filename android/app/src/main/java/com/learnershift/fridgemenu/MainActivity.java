@@ -79,7 +79,7 @@ public final class MainActivity extends Activity {
       if (!"file".equals(uri.getScheme())) return false;
       if (uri.getAuthority() != null && !uri.getAuthority().isEmpty()) return false;
       String path = Uri.decode(uri.getEncodedPath());
-      if (path == null || !path.startsWith(APP_PATH) || path.indexOf('\\') >= 0) return false;
+      if (path == null || !path.startsWith(APP_PATH) || path.indexOf('\\') >= 0 || path.indexOf('%') >= 0) return false;
       for (String segment : path.substring(APP_PATH.length()).split("/")) {
         if (".".equals(segment) || "..".equals(segment)) return false;
       }

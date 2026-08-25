@@ -246,8 +246,9 @@ function boot() {
     try {
       if (!storage) throw new Error("Local storage unavailable");
       storage.setItem(STORAGE_KEY, serializeState({ ingredients, favorites, history }));
+      return true;
     } catch {
-      announce("This browser blocked local saving; changes last only for this session.", "warning");
+      return false;
     }
   }
 
@@ -295,11 +296,14 @@ function boot() {
       favorite.setAttribute("aria-label", `${active ? "Remove" : "Add"} ${suggestion.title} ${active ? "from" : "to"} favorites`);
       favorite.addEventListener("click", () => {
         favorites = active ? favorites.filter((id) => id !== suggestion.id) : [...favorites, suggestion.id];
-        persist();
+        const saved = persist();
         renderSuggestions(currentSuggestions);
         renderFavorites();
         focusFavoriteButton(suggestion.id);
-        announce(active ? "Favorite removed." : "Meal idea favorited.", "success");
+        announce(saved
+          ? active ? "Favorite removed." : "Meal idea favorited."
+          : `${active ? "Favorite removed" : "Meal idea favorited"} for this session only; local saving is blocked.`,
+        saved ? "success" : "warning");
       });
       content.append(favorite);
     }
@@ -389,13 +393,13 @@ function boot() {
         const position = ordered.findIndex((candidate) => candidate.id === item.id);
         const focusId = ordered[position + 1]?.id ?? ordered[position - 1]?.id;
         ingredients = ingredients.filter((candidate) => candidate.id !== item.id);
-        persist();
+        const saved = persist();
         render();
         renderSuggestions();
         renderFavorites();
         renderHistory();
         focusIngredientAfterRemoval(focusId);
-        announce(`${item.name} removed.`);
+        announce(saved ? `${item.name} removed.` : `${item.name} removed for this session only; local saving is blocked.`, saved ? "neutral" : "warning");
       });
       row.append(dot, ingredientName, expiry, remove);
       list.append(row);
@@ -425,14 +429,14 @@ function boot() {
       return;
     }
     ingredients.push({ id: `ingredient-${Date.now()}-${nextSequence}`, name, expiryDate: expiryInput.value, sequence: nextSequence++ });
-    persist();
+    const saved = persist();
     render();
     renderSuggestions();
     renderFavorites();
     renderHistory();
     form.reset();
     nameInput.focus();
-    announce(`${name} added.`, "success");
+    announce(saved ? `${name} added.` : `${name} added for this session only; local saving is blocked.`, saved ? "success" : "warning");
   });
 
   suggestButton.addEventListener("click", () => {
@@ -442,22 +446,22 @@ function boot() {
     const generated = bindSuggestionsToMenu(menuId, generateSuggestions(ingredients));
     history.push({ id: menuId, createdAt: new Date().toISOString(), suggestions: generated });
     history = history.slice(-HISTORY_LIMIT);
-    persist();
+    const saved = persist();
     renderSuggestions(generated);
     renderHistory();
-    announce("Three offline use-first ideas are ready.", "success");
+    announce(saved ? "Three offline use-first ideas are ready." : "Three ideas are ready for this session only; local saving is blocked.", saved ? "success" : "warning");
     document.querySelector("#menu-heading").focus();
   });
 
   clearButton.addEventListener("click", () => {
     ingredients = [];
     nextSequence = 0;
-    persist();
+    const saved = persist();
     render();
     renderSuggestions();
     renderFavorites();
     renderHistory();
-    announce("Fridge list cleared.");
+    announce(saved ? "Fridge list cleared." : "Fridge list cleared for this session only; local saving is blocked.", saved ? "neutral" : "warning");
     nameInput.focus();
   });
 

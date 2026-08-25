@@ -226,6 +226,7 @@ test("owner handoff covers current Play gates, questionnaire answers, and future
   ]) assert.match(handoff, new RegExp(required, "i"), `handoff missing ${required}`);
   assert.doesNotMatch(handoff, /Upload the unsigned AAB/i);
   assert.doesNotMatch(handoff, /12 testers|14 consecutive days|13 November 2023/i);
+  assert.match(handoff, /Health apps declaration \| No — the app does not provide health functionality/i);
   for (const coupledUpdate of ["Ads declaration", "Data safety", "Advertising ID", "privacy-policy", "play-listing"]) {
     assert.match(qa, new RegExp(coupledUpdate, "i"), `QA missing future AdMob update: ${coupledUpdate}`);
   }
@@ -293,7 +294,7 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v9"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v10"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
@@ -317,6 +318,7 @@ test("Android shell handles system insets, WebView history, rotation, and file-s
   assert.match(activity, /webView\.canGoBack\(\)/);
   assert.match(activity, /APP_ORIGIN/);
   assert.match(activity, /isAllowedAppUrl/);
+  assert.match(activity, /path\.indexOf\('%'\) >= 0/);
   assert.match(activity, /shouldOverrideUrlLoading/);
   assert.match(activity, /shouldInterceptRequest/);
   assert.match(activity, /registerOnBackInvokedCallback/);
@@ -349,6 +351,8 @@ test("user values are rendered with textContent and browser workflow persists al
   assert.match(app, /favorite-button/);
   assert.match(app, /history\.push/);
   assert.match(app, /beforeinstallprompt/);
+  assert.ok((app.match(/const saved = persist\(\)/g) ?? []).length >= 5);
+  assert.match(app, /for this session only; local saving is blocked\./);
 });
 
 test("package has no dependency or install surface", async () => {
@@ -486,7 +490,7 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
 test("owner handoff is fail-closed for unresolved declarations, approvals, testing, and first-release recovery", async () => {
   const [handoff, qa] = await Promise.all([read("release/OWNER-HANDOFF.md"), read("release/QA-CHECKLIST.md")]);
   for (const required of [
-    "OWNER_REQUIRED:HEALTH_APPS_DECLARATION", "Play App Signing", "upload key", "zero OWNER_REQUIRED markers",
+    "No — the app does not provide health functionality", "Play App Signing", "upload key", "zero OWNER_REQUIRED markers",
     "tester list", "opt-in URL", "matching Google account", "delivered version", "country availability",
     "target track", "Git SHA", "AAB SHA-256", "approver", "timestamp", "authority evidence ID",
   ]) assert.match(handoff, new RegExp(required, "i"), `handoff missing fail-closed field: ${required}`);

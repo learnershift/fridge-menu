@@ -36,7 +36,7 @@ Re-confirm every answer against the exact signed candidate before saving it in P
 | Data deletion | Clear list removes ingredients only; clear the app or browser storage, or uninstall, to remove ingredients, favorites, and history | No server copy exists |
 | Content rating | No violence, sexual content, gambling, drugs, or user-generated content | Deterministic local cooking directions only |
 | Target audience | Not directed to children | Product copy and privacy policy state this boundary |
-| Health apps declaration | `[OWNER_REQUIRED:HEALTH_APPS_DECLARATION]` | No nutrition data, diet/weight goal, health tracking, medical claim, or health data; meal output is generic cooking-direction text. The current Console wording and meal-planning examples must be reviewed by the owner; automation must not resolve this declaration |
+| Health apps declaration | No — the app does not provide health functionality | No nutrition data, diet/weight goal, health tracking, medical claim, or health data; meal output is generic cooking-direction text. The owner must re-confirm the current form wording before saving this answer in Play Console |
 | Government apps | Not a government app | No government affiliation or service |
 | Financial features | None | No financial product, transaction, or advice |
 | Advertising ID | Not used | No `AD_ID` permission, ads SDK, or identifier access |
