@@ -51,16 +51,19 @@ function sanitizeIngredient(value, index) {
   return expiryDate ? { id, name, expiryDate, sequence } : { id, name, urgency, sequence };
 }
 
-function sanitizeSuggestion(value) {
+function sanitizeSuggestion(value, historyId) {
   if (!value || typeof value !== "object") return null;
   const id = validText(value.id);
   const title = validText(value.title);
-  const anchor = validText(value.anchor, INGREDIENT_NAME_LIMIT);
+  const anchor = validName(value.anchor);
   const useFirstReason = validText(value.useFirstReason);
   const method = validText(value.method);
-  if (!id || !title || !anchor || !useFirstReason || !method || !Array.isArray(value.ingredients)) return null;
-  const ingredients = value.ingredients.slice(0, MAX_INGREDIENTS).map(validName).filter(Boolean);
-  if (!ingredients.length) return null;
+  if (!id || !id.startsWith(`${historyId}:`) || !title || !anchor || !useFirstReason || !method || !Array.isArray(value.ingredients)) return null;
+  const ingredients = value.ingredients.slice(0, MAX_INGREDIENTS).map(validName);
+  if (!ingredients.length || ingredients.some((name) => !name)) return null;
+  const ingredientKeys = ingredients.map((name) => name.toLocaleLowerCase("en-US"));
+  const anchorKey = anchor.toLocaleLowerCase("en-US");
+  if (new Set(ingredientKeys).size !== ingredientKeys.length || !ingredientKeys.includes(anchorKey)) return null;
   return { id, title, anchor, ingredients, useFirstReason, method };
 }
 
@@ -70,7 +73,7 @@ function sanitizeHistoryEntry(value) {
   const createdAt = validText(value.createdAt);
   if (!id || !createdAt || !Number.isFinite(Date.parse(createdAt)) || !Array.isArray(value.suggestions)) return null;
   const suggestionIds = new Set();
-  const suggestions = value.suggestions.slice(0, SUGGESTIONS_LIMIT).map(sanitizeSuggestion).filter((suggestion) => {
+  const suggestions = value.suggestions.slice(0, SUGGESTIONS_LIMIT).map((suggestion) => sanitizeSuggestion(suggestion, id)).filter((suggestion) => {
     if (!suggestion || suggestionIds.has(suggestion.id)) return false;
     suggestionIds.add(suggestion.id);
     return true;
@@ -92,6 +95,7 @@ function sanitizeState(state) {
     return true;
   });
   const historyIds = new Set();
+  const suggestionIds = new Set();
   const history = Array.isArray(state?.history)
     ? state.history.slice(-HISTORY_LIMIT).map(sanitizeHistoryEntry).filter(Boolean)
       .filter((entry) => {
@@ -99,6 +103,11 @@ function sanitizeState(state) {
         historyIds.add(entry.id);
         return true;
       })
+      .map((entry) => ({ ...entry, suggestions: entry.suggestions.filter((suggestion) => {
+        if (suggestionIds.has(suggestion.id)) return false;
+        suggestionIds.add(suggestion.id);
+        return true;
+      }) }))
     : [];
   const suggestionIdCounts = new Map();
   for (const suggestion of history.flatMap((entry) => entry.suggestions)) {
@@ -171,8 +180,15 @@ export function usableSuggestions(suggestions, ingredients, today) {
     if (item.expiryDate) return !["expired", "invalid"].includes(getExpiryStatus(item.expiryDate, today));
     return VALID_URGENCIES.has(item.urgency);
   }).map((item) => normalizeName(item.name).toLocaleLowerCase("en-US")));
-  return suggestions.filter((suggestion) => Array.isArray(suggestion?.ingredients) &&
-    suggestion.ingredients.every((name) => available.has(normalizeName(name).toLocaleLowerCase("en-US"))));
+  return suggestions.filter((suggestion) => {
+    const anchor = validName(suggestion?.anchor);
+    if (!anchor || !Array.isArray(suggestion?.ingredients)) return false;
+    const names = suggestion.ingredients.map(validName);
+    if (!names.length || names.some((name) => !name)) return false;
+    const keys = names.map((name) => name.toLocaleLowerCase("en-US"));
+    return new Set(keys).size === keys.length && keys.includes(anchor.toLocaleLowerCase("en-US")) &&
+      keys.every((key) => available.has(key));
+  });
 }
 
 export function bindSuggestionsToMenu(menuId, suggestions) {

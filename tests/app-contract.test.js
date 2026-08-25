@@ -64,9 +64,9 @@ test("state loading and serialization fail closed on blocked or oversized storag
       id: "history-1",
       createdAt: "2026-08-25T00:00:00.000Z",
       suggestions: Array.from({ length: 20 }, (_, index) => ({
-        id: `suggestion-${index}`,
+        id: `history-1:suggestion-${index}`,
         title: `Suggestion ${index}`,
-        anchor: "Kale",
+        anchor: "item-0",
         ingredients: Array.from({ length: 20 }, (_, ingredientIndex) => `item-${ingredientIndex}`),
         useFirstReason: "Use this first.",
         method: "Cook until ready.",
@@ -117,7 +117,7 @@ test("browser storage access, duplicate identities, and invalid history fail clo
     favorites: [],
     history: [{
       id: "history-object", createdAt: "2026-08-25T08:00:00.000Z",
-      suggestions: [{ id: "suggestion-object", title: "Bad", anchor: "Kale", ingredients: [{ coerces: true }], useFirstReason: "Bad.", method: "Bad." }],
+      suggestions: [{ id: "history-object:suggestion-object", title: "Bad", anchor: "Kale", ingredients: [{ coerces: true }], useFirstReason: "Bad.", method: "Bad." }],
     }],
   });
   const objectState = parseStoredState(objectNames);
@@ -162,6 +162,20 @@ test("history and favorites cannot render guidance for removed or expired ingred
   assert.deepEqual(usableSuggestions([suggestion], fresh, "2026-08-25"), [suggestion]);
   assert.deepEqual(usableSuggestions([suggestion], fresh, "2026-08-27"), [], "expired history guidance must disappear");
   assert.deepEqual(usableSuggestions([suggestion], fresh.slice(0, 2), "2026-08-25"), [], "removed ingredients must invalidate history guidance");
+  assert.deepEqual(usableSuggestions([{ ...suggestion, anchor: "Removed Chicken", ingredients: ["Kale", "Kale"] }], fresh, "2026-08-25"), [],
+    "anchor and ingredient references must be unique and internally consistent");
+});
+
+test("stored suggestions are bound to one unique history identity", () => {
+  const suggestion = { id: "menu-a:suggestion-1", title: "Skillet", anchor: "Kale", ingredients: ["Kale"], useFirstReason: "First.", method: "Cook." };
+  const restored = parseStoredState(JSON.stringify({
+    version: 2, ingredients: [{ id: "kale", name: "Kale", expiryDate: "2099-01-02", sequence: 0 }], favorites: [],
+    history: [
+      { id: "menu-a", createdAt: "2026-08-25T08:00:00.000Z", suggestions: [suggestion] },
+      { id: "menu-b", createdAt: "2026-08-26T08:00:00.000Z", suggestions: [suggestion] },
+    ],
+  }));
+  assert.deepEqual(restored.history.map((entry) => entry.suggestions.length), [1, 0]);
 });
 
 test("ingredient changes and day rollover revalidate rendered history and favorites", async () => {
@@ -279,7 +293,7 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v8"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v9"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
