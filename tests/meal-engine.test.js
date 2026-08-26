@@ -78,13 +78,15 @@ test("use-first sorting prioritizes urgency then insertion sequence", () => {
   assert.deepEqual(sortUseFirst(sample).map((item) => item.name), ["Spinach", "Tofu", "Mushrooms", "Rice"]);
 });
 
-test("suggestions are deterministic, three in count, and rotate the anchor", () => {
+test("suggestions are deterministic and keep the use-first ingredient as every anchor", () => {
   const first = generateSuggestions(sample);
   const second = generateSuggestions(structuredClone(sample));
   assert.equal(first.length, 3);
   assert.deepEqual(first, second);
-  assert.deepEqual(first.map((item) => item.anchor), ["Spinach", "Tofu", "Mushrooms"]);
-  assert.deepEqual(first[0].ingredients, ["Spinach", "Tofu", "Mushrooms", "Rice"]);
+  assert.deepEqual(first.map((item) => item.anchor), ["Spinach", "Spinach", "Spinach"]);
+  for (const suggestion of first) {
+    assert.deepEqual(suggestion.ingredients, ["Spinach", "Tofu", "Mushrooms", "Rice"]);
+  }
 });
 
 test("date-backed suggestions are deterministic and mention no unavailable food", () => {
@@ -96,6 +98,8 @@ test("date-backed suggestions are deterministic and mention no unavailable food"
   const first = generateSuggestions(records, "2026-08-01");
   assert.equal(first.length, 3);
   assert.deepEqual(first, generateSuggestions(structuredClone(records), "2026-08-01"));
+  assert.deepEqual(first.map((item) => item.anchor), ["Beans", "Beans", "Beans"]);
+  assert.ok(first.every((item) => item.ingredients.join(",") === "Beans,Corn,Tomatoes"));
   const available = new Set(records.map((item) => item.name));
   for (const suggestion of first) {
     assert.ok(suggestion.ingredients.every((name) => available.has(name)));

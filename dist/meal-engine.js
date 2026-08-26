@@ -81,9 +81,8 @@ export function generateSuggestions(records, today = localToday()) {
   if (!validation.ok) return [];
   const ordered = sortUseFirst(records, today);
   return MEAL_TEMPLATES.map((template, index) => {
-    const anchorIndex = index % ordered.length;
-    const ingredients = ordered.map((_, offset) => ordered[(anchorIndex + offset) % ordered.length].name);
-    const anchor = ordered[anchorIndex];
+    const anchor = ordered[0];
+    const ingredients = ordered.map((ingredient) => ingredient.name);
     return {
       id: `suggestion-${index + 1}`,
       title: template.title,
