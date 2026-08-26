@@ -8,6 +8,7 @@
     "android:aab": "node scripts/android-package.mjs",
     "android:evidence": "node scripts/android-evidence.mjs",
     "build": "node scripts/build.mjs",
+    "ci:receipt": "node scripts/ci-release-receipt.mjs",
     "release:manifest": "node scripts/release-manifest.mjs",
     "test": "node --test tests/*.test.js",
     "store-assets": "node scripts/generate-store-assets.mjs",

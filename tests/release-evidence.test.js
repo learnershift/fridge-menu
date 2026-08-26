@@ -12,6 +12,7 @@ import {
   fileEvidence,
   verifyReproducibleBytes,
 } from "../scripts/release-evidence-lib.mjs";
+import { validateCiReleaseProof } from "../scripts/ci-release-receipt.mjs";
 import { computeStaticReleaseChecks } from "../scripts/release-checks.mjs";
 
 test("deep release evidence accepts regular files and rejects traversal and symlinks", async () => {
@@ -75,4 +76,16 @@ test("reproducibility and manifest/evidence agreement fail closed", () => {
   const evidence = { source_revision: "head", source_tree: "tree", identity: manifest.identity, checks: manifest.checks, aab };
   assert.doesNotThrow(() => assertEvidenceAgreement(manifest, evidence, aab));
   assert.throws(() => assertEvidenceAgreement(manifest, { ...evidence, aab: { ...aab, sha256: "b".repeat(64) } }, aab), /evidence mismatch/i);
+});
+
+test("CI receipt binds an unsigned proof bundle to the exact workflow SHA", () => {
+  const aab = { path: "android/app/build/outputs/bundle/release/app-release.aab", bytes: 9, sha256: "a".repeat(64), signing: "UNSIGNED" };
+  const source = { gitRevision: "head", sourceTree: "tree" };
+  const manifest = { ...source, aab };
+  const evidence = { source_revision: "head", source_tree: "tree", aab, submission_readiness: "BLOCKED" };
+  const reproducibility = { ...source, bytes: 9, first_sha256: aab.sha256, second_sha256: aab.sha256, sha256: aab.sha256 };
+  assert.equal(validateCiReleaseProof({ expectedSha: "head", source, aab, manifest, evidence, reproducibility }), "UNSIGNED_LOCAL_VERIFICATION_ONLY");
+  assert.throws(() => validateCiReleaseProof({ expectedSha: "other", source, aab, manifest, evidence, reproducibility }), /workflow SHA/i);
+  assert.throws(() => validateCiReleaseProof({ expectedSha: "head", source, aab: { ...aab, signing: "SIGNED" }, manifest, evidence, reproducibility }), /unsigned/i);
+  assert.throws(() => validateCiReleaseProof({ expectedSha: "head", source, aab, manifest: { ...manifest, aab: { ...aab, sha256: "b".repeat(64) } }, evidence, reproducibility }), /proof mismatch/i);
 });

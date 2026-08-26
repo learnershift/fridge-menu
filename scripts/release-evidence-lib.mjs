@@ -126,15 +126,23 @@ export function assertEvidenceAgreement(manifest, evidence, actualAab) {
 export async function verifyAndroidToolchain(root) {
   const sdk = process.env.FRIDGE_MENU_ANDROID_SDK || process.env.ANDROID_SDK_ROOT || process.env.ANDROID_HOME;
   const javaHome = process.env.JAVA_HOME;
-  const gradle = process.env.FRIDGE_MENU_GRADLE || (process.platform === "win32" ? "gradle.bat" : "gradle");
+  const gradle = resolve(root, "android", process.platform === "win32" ? "gradlew.bat" : "gradlew");
   if (!sdk || !javaHome) throw new Error("FRIDGE_MENU_ANDROID_SDK and JAVA_HOME are required for the pinned Android toolchain.");
   await Promise.all([
     access(resolve(sdk, "platforms/android-36/android.jar")),
     access(resolve(sdk, "build-tools/36.0.0")),
     access(resolve(javaHome, "bin/java")),
+    access(gradle),
   ]);
+  const wrapperProperties = await readFile(resolve(root, "android/gradle/wrapper/gradle-wrapper.properties"), "utf8");
+  const wrapperJar = await readFile(resolve(root, "android/gradle/wrapper/gradle-wrapper.jar"));
+  if (!/gradle-8\.11\.1-bin\.zip/.test(wrapperProperties) ||
+      !/distributionSha256Sum=f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6/.test(wrapperProperties) ||
+      digest(wrapperJar) !== "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046") {
+    throw new Error("Pinned Gradle wrapper provenance is invalid.");
+  }
   const java = spawnSync(resolve(javaHome, "bin/java"), ["-version"], { encoding: "utf8", env: { ...process.env, LC_ALL: "C", LANG: "C" } });
-  const gradleVersion = spawnSync(gradle, ["--version"], { cwd: resolve(root, "android"), encoding: "utf8", env: { ...process.env, LC_ALL: "C", LANG: "C", TZ: "UTC" } });
+  const gradleVersion = spawnSync(gradle, ["--version"], { cwd: resolve(root, "android"), encoding: "utf8", env: { ...process.env, LC_ALL: "C", LANG: "C", TZ: "UTC" }, shell: process.platform === "win32" });
   if (java.error || java.status !== 0 || !/version "17\./.test(`${java.stdout}\n${java.stderr}`)) throw new Error("Pinned Android build requires JDK 17.");
   if (gradleVersion.error || gradleVersion.status !== 0 || !/Gradle 8\.11\.1/.test(gradleVersion.stdout)) throw new Error("Pinned Android build requires Gradle 8.11.1.");
   const androidBuild = await readFile(resolve(root, "android/build.gradle.kts"), "utf8");

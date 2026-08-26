@@ -6,6 +6,7 @@ coverage/
 .env
 .env.*
 !.env.example
+# Generated release proof stays out of Git and is retained as a SHA-bound CI artifact.
 release/artifacts/
 release/captures/*
 !release/captures/fridge-menu-0*-1080x1920.png

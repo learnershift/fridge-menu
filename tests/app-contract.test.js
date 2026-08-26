@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -375,7 +376,7 @@ test("package has no dependency or install surface", async () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
-  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:aab-repro", "verify:release"]);
+  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "ci:receipt", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:aab-repro", "verify:release"]);
 });
 
 test("verify:release builds the AAB before manifest and Android evidence", async () => {
@@ -440,6 +441,8 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   const handoff = await read("release/OWNER-HANDOFF.md");
   const qaChecklist = await read("release/QA-CHECKLIST.md");
   const gitignore = await read(".gitignore");
+  const wrapperProperties = await read("android/gradle/wrapper/gradle-wrapper.properties");
+  const wrapperJar = await readFile(resolve(root, "android/gradle/wrapper/gradle-wrapper.jar"));
 
   assert.equal(pkg.scripts["android:aab"], "node scripts/android-package.mjs");
   assert.equal(pkg.scripts["verify:aab-repro"], "node scripts/verify-aab-repro.mjs");
@@ -456,6 +459,7 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(androidBuild, /applicationId\s*=\s*"com.learnershift.fridgemenu"/);
   assert.match(androidRootBuild, /com\.android\.application"\) version "8\.9\.1"/);
   assert.match(packaging, /FRIDGE_MENU_ANDROID_SDK/);
+  assert.doesNotMatch(packaging, /FRIDGE_MENU_GRADLE|\? "gradle\.bat" : "gradle"/);
   assert.match(packaging, /inspectAabSigning/);
   assert.match(packaging, /do not create or import signing keys/i);
   assert.match(gitignore, /\*\.jks/);
@@ -481,9 +485,17 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   for (const name of ["01-empty-home", "02-use-first-list", "03-menu-results", "04-favorites-history"]) {
     assert.match(capture, new RegExp(name));
   }
+  assert.match(wrapperProperties, /gradle-8\.11\.1-bin\.zip/);
+  assert.match(wrapperProperties, /distributionSha256Sum=f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6/);
+  assert.equal(createHash("sha256").update(wrapperJar).digest("hex"), "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046");
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run build/);
-  assert.doesNotMatch(workflow, /npm run release:manifest|upload-artifact/);
+  assert.match(workflow, /npm run verify:release/);
+  assert.match(workflow, /npm run ci:receipt/);
+  assert.match(workflow, /FRIDGE_MENU_REQUIRE_UNSIGNED:\s*["']?1/);
+  assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40}/);
+  assert.match(workflow, /unsigned-release-proof-\$\{\{ github\.sha \}\}/);
+  assert.doesNotMatch(workflow, /secrets\./);
   assert.match(privacy, /no account, analytics, advertising SDK, tracking, or remote API/i);
   assert.match(listing, /Short description/);
   assert.match(dataSafety, /No data collected or shared/);
@@ -527,9 +539,9 @@ test("GitHub Pages publication is manual-only and deploys only the freshly built
   assert.doesNotMatch(workflow, /^\s*push:\s*$/m);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run build/);
-  assert.match(workflow, /actions\/upload-pages-artifact@v3/);
+  assert.match(workflow, /actions\/upload-pages-artifact@[0-9a-f]{40}/);
   assert.match(workflow, /path:\s*dist/);
-  assert.match(workflow, /actions\/deploy-pages@v4/);
+  assert.match(workflow, /actions\/deploy-pages@[0-9a-f]{40}/);
   assert.match(workflow, /pages:\s*write/);
   assert.match(workflow, /id-token:\s*write/);
 });
