@@ -280,6 +280,7 @@ test("HTML contains semantic accessible pantry favorites history and install con
   assert.match(html, /aria-label="Ingredient count: 0 of 8"/);
   assert.match(html, /id="ingredient-name"[^>]*aria-describedby="status-message"/);
   assert.match(html, /id="ingredient-expiry"[^>]*aria-describedby="status-message"/);
+  assert.match(html, /<main id="main" tabindex="-1">/, "skip-link target must accept programmatic focus");
 });
 
 test("privacy policy is available in-app and keeps owner-only identity values explicit", async () => {
