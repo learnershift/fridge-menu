@@ -354,7 +354,7 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v13"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v14"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
@@ -392,12 +392,17 @@ test("Android shell handles system insets, WebView history, rotation, and file-s
 });
 
 test("rerendered controls restore focus and expose changing state in accessible names", async () => {
-  const app = await read("app.js");
+  const [app, html] = await Promise.all([read("app.js"), read("index.html")]);
   assert.match(app, /favorite\.dataset\.suggestionId = suggestion\.id/);
   assert.match(app, /favorite\.setAttribute\("aria-label"/);
   assert.match(app, /focusFavoriteButton\(suggestion\.id\)/);
   assert.match(app, /row\.dataset\.ingredientId = item\.id/);
   assert.match(app, /focusIngredientAfterRemoval/);
+  assert.match(app, /button\.dataset\.historyId = entry\.id/);
+  assert.match(app, /function captureDynamicFocus\(\)/);
+  assert.match(app, /function restoreDynamicFocus\(snapshot\)/);
+  assert.ok((app.match(/refreshRenderedStatePreservingFocus\(\)/g) ?? []).length >= 4);
+  assert.match(html, /id="history-heading" tabindex="-1"/);
   assert.match(app, /count\.setAttribute\("aria-label", `Ingredient count: \$\{ingredients\.length\} of \$\{MAX_INGREDIENTS\}`\)/);
 });
 
@@ -408,6 +413,7 @@ test("user values are rendered with textContent and browser workflow persists al
   assert.match(app, /heading\.textContent = suggestion\.title/);
   assert.match(app, /expiryDate: expiryInput\.value/);
   assert.match(app, /commitStateTransaction\(navigator\.locks, storage/);
+  assert.match(app, /nextMenuSequence = Math\.max\(nextMenuSequence, history\.length\)/);
   assert.match(app, /favorite-button/);
   assert.match(app, /history\.push/);
   assert.match(app, /beforeinstallprompt/);

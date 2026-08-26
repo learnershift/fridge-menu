@@ -304,7 +304,7 @@ function boot() {
     history = next.history;
     currentSuggestions = history.at(-1)?.suggestions ?? [];
     nextSequence = ingredients.reduce((max, item) => Math.max(max, item.sequence + 1), 0);
-    nextMenuSequence = history.length;
+    nextMenuSequence = Math.max(nextMenuSequence, history.length);
   }
 
   async function persist(mutate) {
@@ -331,6 +331,41 @@ function boot() {
     const row = [...list.querySelectorAll(".ingredient-item")]
       .find((candidate) => candidate.dataset.ingredientId === ingredientId);
     (row?.querySelector(".remove-button") ?? nameInput).focus();
+  }
+
+  function captureDynamicFocus() {
+    const active = document.activeElement;
+    if (active?.classList.contains("remove-button")) {
+      return { kind: "ingredient", id: active.closest(".ingredient-item")?.dataset.ingredientId };
+    }
+    if (active?.classList.contains("favorite-button")) {
+      return { kind: "favorite", id: active.dataset.suggestionId, scope: favoritesList.contains(active) ? "favorites" : "suggestions" };
+    }
+    if (active?.classList.contains("history-button")) {
+      return { kind: "history", id: active.dataset.historyId };
+    }
+    return null;
+  }
+
+  function restoreDynamicFocus(snapshot) {
+    if (!snapshot) return;
+    let target;
+    let fallback;
+    if (snapshot.kind === "ingredient") {
+      target = [...list.querySelectorAll(".ingredient-item")]
+        .find((item) => item.dataset.ingredientId === snapshot.id)?.querySelector(".remove-button");
+      fallback = nameInput;
+    } else if (snapshot.kind === "favorite") {
+      const container = snapshot.scope === "favorites" ? favoritesList : suggestions;
+      target = [...container.querySelectorAll(".favorite-button")]
+        .find((button) => button.dataset.suggestionId === snapshot.id);
+      fallback = document.querySelector(snapshot.scope === "favorites" ? "#favorites-heading" : "#menu-heading");
+    } else if (snapshot.kind === "history") {
+      target = [...historyList.querySelectorAll(".history-button")]
+        .find((button) => button.dataset.historyId === snapshot.id);
+      fallback = document.querySelector("#history-heading");
+    }
+    (target && !target.disabled ? target : fallback)?.focus();
   }
 
   function mealCard(suggestion, favoriteEnabled = true) {
@@ -427,6 +462,7 @@ function boot() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "history-button";
+      button.dataset.historyId = entry.id;
       button.disabled = usable.length === 0;
       button.textContent = usable.length
         ? `${new Date(entry.createdAt).toLocaleString()} · ${usable.map((item) => item.title).join(", ")}`
@@ -486,13 +522,19 @@ function boot() {
     useFirst.textContent = ordered.map((item) => item.name).join(" → ") || "Your use-first order will appear here.";
   }
 
+  function refreshRenderedStatePreservingFocus() {
+    const focusSnapshot = captureDynamicFocus();
+    render();
+    renderSuggestions(currentSuggestions);
+    renderFavorites();
+    renderHistory();
+    restoreDynamicFocus(focusSnapshot);
+  }
+
   function scheduleDayRollover() {
     window.clearTimeout(dayRolloverTimer);
     dayRolloverTimer = window.setTimeout(() => {
-      render();
-      renderSuggestions(currentSuggestions);
-      renderFavorites();
-      renderHistory();
+      refreshRenderedStatePreservingFocus();
       announce("Freshness updated for a new day.");
       scheduleDayRollover();
     }, millisecondsUntilNextLocalDay());
@@ -601,19 +643,13 @@ function boot() {
     const external = parseStoredState(externalRaw);
     applyState(external);
     lastKnownRaw = externalRaw;
-    render();
-    renderSuggestions(currentSuggestions);
-    renderFavorites();
-    renderHistory();
+    refreshRenderedStatePreservingFocus();
     announce("Updated from another tab.");
   });
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
-    render();
-    renderSuggestions(currentSuggestions);
-    renderFavorites();
-    renderHistory();
+    refreshRenderedStatePreservingFocus();
     scheduleDayRollover();
   });
 
