@@ -21,7 +21,7 @@ import {
   serializeIngredients,
   serializeState,
   usableSuggestions,
-  writeStateIfUnchanged,
+  commitStateTransaction,
 } from "../app.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -140,15 +140,34 @@ test("browser storage access, duplicate identities, and invalid history fail clo
   assert.deepEqual(invalidTimes.history, []);
 });
 
-test("stale tabs cannot overwrite a newer local snapshot", () => {
-  let raw = "newer-tab-state";
+test("cross-tab mutations serialize through one state writer", async () => {
+  let raw = serializeState({ ingredients: [], favorites: [], history: [] });
   const storage = { getItem: () => raw, setItem: (_key, value) => { raw = value; } };
-  assert.deepEqual(writeStateIfUnchanged(storage, "stale-tab-state", { ingredients: [], favorites: [], history: [] }), { status: "conflict", raw: "stale-tab-state" });
-  assert.equal(raw, "newer-tab-state");
-  const saved = writeStateIfUnchanged(storage, "newer-tab-state", { ingredients: [], favorites: [], history: [] });
-  assert.equal(saved.status, "saved");
-  assert.equal(raw, saved.raw);
-  assert.equal(writeStateIfUnchanged(null, null, { ingredients: [], favorites: [], history: [] }).status, "blocked");
+  let queue = Promise.resolve();
+  const locks = {
+    request(_name, _options, callback) {
+      const result = queue.then(callback);
+      queue = result.then(() => undefined, () => undefined);
+      return result;
+    },
+  };
+  const add = (id) => commitStateTransaction(locks, storage, (state) => ({
+    ...state, ingredients: [...state.ingredients, { id, name: id, expiryDate: "2099-01-01", sequence: state.ingredients.length }],
+  }));
+  const [first, second] = await Promise.all([add("Kale"), add("Tofu")]);
+  assert.equal(first.status, "saved");
+  assert.equal(second.status, "saved");
+  assert.deepEqual(parseStoredState(raw).ingredients.map((item) => item.name), ["Kale", "Tofu"]);
+
+  const removeKale = commitStateTransaction(locks, storage, (state) => ({
+    ...state, ingredients: state.ingredients.filter((item) => item.name !== "Kale"),
+  }));
+  const addRice = commitStateTransaction(locks, storage, (state) => ({
+    ...state, ingredients: [...state.ingredients, { id: "Rice", name: "Rice", expiryDate: "2099-01-02", sequence: 2 }],
+  }));
+  await Promise.all([removeKale, addRice]);
+  assert.deepEqual(parseStoredState(raw).ingredients.map((item) => item.name), ["Tofu", "Rice"]);
+  assert.equal((await commitStateTransaction(null, storage, (state) => state)).status, "blocked");
 });
 
 test("menu and favorite identities stay unique across history entries", () => {
@@ -335,7 +354,7 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v12"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v13"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
@@ -388,13 +407,14 @@ test("user values are rendered with textContent and browser workflow persists al
   assert.match(app, /ingredientName\.textContent = item\.name/);
   assert.match(app, /heading\.textContent = suggestion\.title/);
   assert.match(app, /expiryDate: expiryInput\.value/);
-  assert.match(app, /writeStateIfUnchanged\(storage, lastKnownRaw, \{ ingredients, favorites, history \}\)/);
+  assert.match(app, /commitStateTransaction\(navigator\.locks, storage/);
   assert.match(app, /favorite-button/);
   assert.match(app, /history\.push/);
   assert.match(app, /beforeinstallprompt/);
-  assert.ok((app.match(/const saved = persist\(\)/g) ?? []).length >= 5);
-  assert.match(app, /for this session only; local saving is blocked\./);
+  assert.ok((app.match(/const result = await persist\(/g) ?? []).length >= 5);
+  assert.match(app, /for this session only; safe multi-tab saving is unavailable\./);
   assert.match(app, /window\.addEventListener\("storage"/);
+  assert.match(app, /event\.key !== STORAGE_KEY && event\.key !== null/);
   assert.match(app, /Another tab changed saved data/);
 });
 

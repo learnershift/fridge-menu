@@ -173,15 +173,21 @@ export function serializeState(state) {
   return JSON.stringify({ version: STATE_VERSION, ...sanitizeState(state) });
 }
 
-export function writeStateIfUnchanged(storage, expectedRaw, state) {
+export async function commitStateTransaction(locks, storage, mutate) {
   try {
-    if (!storage || typeof storage.getItem !== "function" || typeof storage.setItem !== "function") return { status: "blocked", raw: expectedRaw };
-    if (storage.getItem(STORAGE_KEY) !== expectedRaw) return { status: "conflict", raw: expectedRaw };
-    const raw = serializeState(state);
-    storage.setItem(STORAGE_KEY, raw);
-    return { status: "saved", raw };
+    if (!locks || typeof locks.request !== "function" || !storage ||
+        typeof storage.getItem !== "function" || typeof storage.setItem !== "function") return { status: "blocked" };
+    return await locks.request(`${STORAGE_KEY}:writer`, { mode: "exclusive" }, async () => {
+      const currentRaw = storage.getItem(STORAGE_KEY);
+      const current = parseStoredState(currentRaw);
+      const next = mutate(current);
+      if (!next) return { status: "conflict", raw: currentRaw, state: current };
+      const raw = serializeState(next);
+      storage.setItem(STORAGE_KEY, raw);
+      return { status: "saved", raw, state: parseStoredState(raw) };
+    });
   } catch {
-    return { status: "blocked", raw: expectedRaw };
+    return { status: "blocked" };
   }
 }
 
@@ -269,9 +275,9 @@ function boot() {
   let favorites = restored.favorites;
   let history = restored.history;
   let currentSuggestions = history.at(-1)?.suggestions ?? [];
+  const tabId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   let installPrompt;
   let dayRolloverTimer;
-  let lastPersistFailure = null;
   let hasSessionOnlyChanges = false;
   let nextSequence = ingredients.reduce((max, item) => Math.max(max, item.sequence + 1), 0);
   let nextMenuSequence = history.length;
@@ -292,18 +298,26 @@ function boot() {
     invalidFields[0]?.focus();
   }
 
-  function persist() {
-    const result = writeStateIfUnchanged(storage, lastKnownRaw, { ingredients, favorites, history });
-    lastPersistFailure = result.status === "saved" ? null : result.status;
-    hasSessionOnlyChanges = result.status !== "saved";
-    if (result.status === "saved") lastKnownRaw = result.raw;
-    return result.status === "saved";
+  function applyState(next) {
+    ingredients = next.ingredients;
+    favorites = next.favorites;
+    history = next.history;
+    currentSuggestions = history.at(-1)?.suggestions ?? [];
+    nextSequence = ingredients.reduce((max, item) => Math.max(max, item.sequence + 1), 0);
+    nextMenuSequence = history.length;
   }
 
-  function persistenceFailureMessage(message) {
-    return lastPersistFailure === "conflict"
-      ? `${message} Another tab changed saved data; reload before saving again.`
-      : message;
+  async function persist(mutate) {
+    const result = await commitStateTransaction(navigator.locks, storage, mutate);
+    hasSessionOnlyChanges = result.status === "blocked";
+    if (result.state) applyState(result.state);
+    if (result.raw !== undefined) lastKnownRaw = result.raw;
+    return result;
+  }
+
+  function persistenceMessage(result, success, sessionOnly, conflict) {
+    if (result.status === "saved") return success;
+    return result.status === "conflict" ? conflict : sessionOnly;
   }
 
   function focusFavoriteButton(suggestionId) {
@@ -348,16 +362,21 @@ function boot() {
       favorite.textContent = active ? "Remove favorite" : "Favorite";
       favorite.setAttribute("aria-pressed", String(active));
       favorite.setAttribute("aria-label", `${active ? "Remove" : "Add"} ${suggestion.title} ${active ? "from" : "to"} favorites`);
-      favorite.addEventListener("click", () => {
+      favorite.addEventListener("click", async () => {
         favorites = active ? favorites.filter((id) => id !== suggestion.id) : [...favorites, suggestion.id];
-        const saved = persist();
+        const result = await persist((state) => ({
+          ...state,
+          favorites: active ? state.favorites.filter((id) => id !== suggestion.id) : [...new Set([...state.favorites, suggestion.id])],
+        }));
         renderSuggestions(currentSuggestions);
         renderFavorites();
         focusFavoriteButton(suggestion.id);
-        announce(saved
-          ? active ? "Favorite removed." : "Meal idea favorited."
-          : persistenceFailureMessage(`${active ? "Favorite removed" : "Meal idea favorited"} for this session only; local saving is blocked.`),
-        saved ? "success" : "warning");
+        announce(persistenceMessage(
+          result,
+          active ? "Favorite removed." : "Meal idea favorited.",
+          `${active ? "Favorite removed" : "Meal idea favorited"} for this session only; safe multi-tab saving is unavailable.`,
+          "Favorite change was not applied because another tab changed the saved data. Try again.",
+        ), result.status === "saved" ? "success" : "warning");
       });
       content.append(favorite);
     }
@@ -443,17 +462,17 @@ function boot() {
       remove.className = "remove-button";
       remove.textContent = "Remove";
       remove.setAttribute("aria-label", `Remove ${item.name}`);
-      remove.addEventListener("click", () => {
+      remove.addEventListener("click", async () => {
         const position = ordered.findIndex((candidate) => candidate.id === item.id);
         const focusId = ordered[position + 1]?.id ?? ordered[position - 1]?.id;
         ingredients = ingredients.filter((candidate) => candidate.id !== item.id);
-        const saved = persist();
+        const result = await persist((state) => ({ ...state, ingredients: state.ingredients.filter((candidate) => candidate.id !== item.id) }));
         render();
         renderSuggestions();
         renderFavorites();
         renderHistory();
         focusIngredientAfterRemoval(focusId);
-        announce(saved ? `${item.name} removed.` : persistenceFailureMessage(`${item.name} removed for this session only; local saving is blocked.`), saved ? "neutral" : "warning");
+        announce(persistenceMessage(result, `${item.name} removed.`, `${item.name} removed for this session only; safe multi-tab saving is unavailable.`, `${item.name} was not removed because another tab changed the saved data. Try again.`), result.status === "saved" ? "neutral" : "warning");
       });
       row.append(dot, ingredientName, expiry, remove);
       list.append(row);
@@ -483,7 +502,7 @@ function boot() {
     if (event.target === nameInput || event.target === expiryInput) clearFormErrors([event.target]);
   });
 
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = normalizeName(nameInput.value);
     if (!name || !expiryInput.value) {
@@ -505,40 +524,49 @@ function boot() {
       return;
     }
     clearFormErrors();
-    ingredients.push({ id: `ingredient-${Date.now()}-${nextSequence}`, name, expiryDate: expiryInput.value, sequence: nextSequence++ });
-    const saved = persist();
+    const ingredient = { id: `ingredient-${tabId}-${nextSequence}`, name, expiryDate: expiryInput.value, sequence: nextSequence++ };
+    ingredients.push(ingredient);
+    const result = await persist((state) => {
+      if (state.ingredients.length >= MAX_INGREDIENTS || state.ingredients.some((item) => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) return null;
+      const sequence = state.ingredients.reduce((max, item) => Math.max(max, item.sequence + 1), 0);
+      return { ...state, ingredients: [...state.ingredients, { ...ingredient, sequence }] };
+    });
     render();
     renderSuggestions();
     renderFavorites();
     renderHistory();
     form.reset();
     nameInput.focus();
-    announce(saved ? `${name} added.` : persistenceFailureMessage(`${name} added for this session only; local saving is blocked.`), saved ? "success" : "warning");
+    announce(persistenceMessage(result, `${name} added.`, `${name} added for this session only; safe multi-tab saving is unavailable.`, `${name} was not added because another tab changed the saved data. Check the list and try again.`), result.status === "saved" ? "success" : "warning");
   });
 
-  suggestButton.addEventListener("click", () => {
+  suggestButton.addEventListener("click", async () => {
     const validation = validateIngredients(ingredients);
     if (!validation.ok) { announce(validation.message, "error"); return; }
-    const menuId = `menu-${Date.now()}-${nextMenuSequence++}`;
+    const menuId = `menu-${tabId}-${nextMenuSequence++}`;
     const generated = bindSuggestionsToMenu(menuId, generateSuggestions(ingredients));
     history.push({ id: menuId, createdAt: new Date().toISOString(), suggestions: generated });
     history = history.slice(-HISTORY_LIMIT);
-    const saved = persist();
-    renderSuggestions(generated);
+    const result = await persist((state) => {
+      if (!validateIngredients(state.ingredients).ok) return null;
+      const latestSuggestions = bindSuggestionsToMenu(menuId, generateSuggestions(state.ingredients));
+      return { ...state, history: [...state.history, { id: menuId, createdAt: new Date().toISOString(), suggestions: latestSuggestions }].slice(-HISTORY_LIMIT) };
+    });
+    renderSuggestions(result.status === "blocked" ? generated : currentSuggestions);
     renderHistory();
-    announce(saved ? "Three offline use-first ideas are ready." : persistenceFailureMessage("Three ideas are ready for this session only; local saving is blocked."), saved ? "success" : "warning");
+    announce(persistenceMessage(result, "Three offline use-first ideas are ready.", "Three ideas are ready for this session only; safe multi-tab saving is unavailable.", "A menu was not created because another tab changed the saved ingredients. Check the list and try again."), result.status === "saved" ? "success" : "warning");
     document.querySelector("#menu-heading").focus();
   });
 
-  clearButton.addEventListener("click", () => {
+  clearButton.addEventListener("click", async () => {
     ingredients = [];
     nextSequence = 0;
-    const saved = persist();
+    const result = await persist((state) => ({ ...state, ingredients: [] }));
     render();
     renderSuggestions();
     renderFavorites();
     renderHistory();
-    announce(saved ? "Fridge list cleared." : persistenceFailureMessage("Fridge list cleared for this session only; local saving is blocked."), saved ? "neutral" : "warning");
+    announce(persistenceMessage(result, "Fridge list cleared.", "Fridge list cleared for this session only; safe multi-tab saving is unavailable.", "The list was not cleared because another tab changed the saved data. Try again."), result.status === "saved" ? "neutral" : "warning");
     nameInput.focus();
   });
 
@@ -563,19 +591,16 @@ function boot() {
   window.addEventListener("appinstalled", () => announce("Fridge Menu installed.", "success"));
 
   window.addEventListener("storage", (event) => {
-    if (event.key !== STORAGE_KEY || event.newValue === lastKnownRaw) return;
+    if ((event.storageArea && event.storageArea !== storage) || (event.key !== STORAGE_KEY && event.key !== null)) return;
+    const externalRaw = event.key === null ? null : event.newValue;
+    if (externalRaw === lastKnownRaw) return;
     if (hasSessionOnlyChanges) {
       announce("Another tab changed saved data. This tab has session-only changes; reload before saving again.", "warning");
       return;
     }
-    const external = parseStoredState(event.newValue);
-    ingredients = external.ingredients;
-    favorites = external.favorites;
-    history = external.history;
-    currentSuggestions = history.at(-1)?.suggestions ?? [];
-    nextSequence = ingredients.reduce((max, item) => Math.max(max, item.sequence + 1), 0);
-    nextMenuSequence = history.length;
-    lastKnownRaw = event.newValue;
+    const external = parseStoredState(externalRaw);
+    applyState(external);
+    lastKnownRaw = externalRaw;
     render();
     renderSuggestions(currentSuggestions);
     renderFavorites();
