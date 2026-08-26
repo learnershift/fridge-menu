@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 import {
   assertCleanGitTree,
@@ -53,8 +54,8 @@ test("release checks reject concatenated remote URLs and use narrow check names"
   const fixture = {
     css: ".remove-button { min-width: 2.75rem; min-height: 2.75rem; }",
     androidManifest: "<manifest><application /></manifest>",
-    mainActivity: 'view.loadUrl("file:///android_asset/pwa/index.html");',
-    serviceWorker: 'const files = ["./index.html"];',
+    mainActivity: 'private static final String APP_ENTRY = "file:///android_asset/pwa/index.html"; view.loadUrl(APP_ENTRY);',
+    serviceWorker: 'const APP_SHELL = Object.freeze(["./index.html"]); cache.addAll(APP_SHELL);',
   };
   assert.deepEqual(computeStaticReleaseChecks(fixture), {
     touch_target_static: "PASS",
@@ -64,6 +65,9 @@ test("release checks reject concatenated remote URLs and use narrow check names"
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: 'view.loadUrl("ht" + "tps://evil.example/");' }).privacy_security_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'fetch("ht" + "tps://evil.example/")' }).offline_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'importScripts("//evil.example/worker.js")' }).offline_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, css: `${fixture.css} .remove-button { max-height: 1px; }` }).touch_target_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadUrl(String.fromCharCode(104));` }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: "fetch(String.fromCharCode(104))" }).offline_static, "FAIL");
 });
 
 test("reproducibility and manifest/evidence agreement fail closed", () => {
@@ -82,10 +86,13 @@ test("CI receipt binds an unsigned proof bundle to the exact workflow SHA", () =
   const aab = { path: "android/app/build/outputs/bundle/release/app-release.aab", bytes: 9, sha256: "a".repeat(64), signing: "UNSIGNED" };
   const source = { gitRevision: "head", sourceTree: "tree" };
   const manifest = { ...source, aab };
-  const evidence = { source_revision: "head", source_tree: "tree", aab, submission_readiness: "BLOCKED" };
+  const manifestSha256 = createHash("sha256").update("manifest-bytes").digest("hex");
+  const evidence = { source_revision: "head", source_tree: "tree", release_manifest_sha256: manifestSha256, aab, submission_readiness: "BLOCKED" };
   const reproducibility = { ...source, bytes: 9, first_sha256: aab.sha256, second_sha256: aab.sha256, sha256: aab.sha256 };
-  assert.equal(validateCiReleaseProof({ expectedSha: "head", source, aab, manifest, evidence, reproducibility }), "UNSIGNED_LOCAL_VERIFICATION_ONLY");
-  assert.throws(() => validateCiReleaseProof({ expectedSha: "other", source, aab, manifest, evidence, reproducibility }), /workflow SHA/i);
-  assert.throws(() => validateCiReleaseProof({ expectedSha: "head", source, aab: { ...aab, signing: "SIGNED" }, manifest, evidence, reproducibility }), /unsigned/i);
-  assert.throws(() => validateCiReleaseProof({ expectedSha: "head", source, aab, manifest: { ...manifest, aab: { ...aab, sha256: "b".repeat(64) } }, evidence, reproducibility }), /proof mismatch/i);
+  const proof = { expectedSha: "head", source, aab, manifest, manifestSha256, evidence, reproducibility };
+  assert.equal(validateCiReleaseProof(proof), true);
+  assert.throws(() => validateCiReleaseProof({ ...proof, expectedSha: "other" }), /workflow SHA/i);
+  assert.throws(() => validateCiReleaseProof({ ...proof, aab: { ...aab, signing: "SIGNED" } }), /unsigned/i);
+  assert.throws(() => validateCiReleaseProof({ ...proof, manifest: { ...manifest, aab: { ...aab, sha256: "b".repeat(64) } } }), /proof mismatch/i);
+  assert.throws(() => validateCiReleaseProof({ ...proof, manifestSha256: "b".repeat(64) }), /manifest bytes/i);
 });

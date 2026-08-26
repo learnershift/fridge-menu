@@ -1,4 +1,4 @@
-const CACHE_NAME = "fridge-menu-shell-v14";
+const CACHE_NAME = "fridge-menu-shell-2c9dcebf73082d73";
 const APP_SHELL = Object.freeze([
   "./",
   "./index.html",
@@ -35,6 +35,6 @@ self.addEventListener("fetch", (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
       }
       return response;
-    }).catch(() => caches.match("./index.html"))),
+    }).catch(() => event.request.mode === "navigate" ? caches.match("./index.html") : Response.error())),
   );
 });

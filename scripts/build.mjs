@@ -1,5 +1,6 @@
 import { copyFile, mkdir, readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import { assertServiceWorkerCacheVersion } from "./runtime-shell.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "dist");
@@ -14,6 +15,8 @@ const runtimeFiles = Object.freeze([
   "service-worker.js",
   "styles.css",
 ]);
+
+await assertServiceWorkerCacheVersion(root);
 
 await mkdir(output, { recursive: true });
 const existing = await readdir(output);

@@ -61,6 +61,8 @@ Never combine these authorities. Record a separate receipt for each action actua
 
 Every receipt must contain: action, target track, Git SHA, AAB SHA-256, approver, timestamp, and authority evidence ID. An earlier receipt does not authorize a later action or a different artifact, track, country availability, visibility, or rollout.
 
+GitHub Pages is a separate publication action. Before dispatching its workflow, protect the `github-pages` environment with the owner as required reviewer, set repository variable `OWNER_APPROVED_PAGES_SHA` to the exact approved `main` SHA, and enter that SHA plus the fresh publication approval evidence ID. Remove or change the variable after the action. Source-level guards do not replace the protected-environment approval.
+
 ## Internal-test and release QA record
 
 Record the Git revision, release-manifest and AAB SHA-256, AAB signing status, CI run URL, Android/Gradle versions, tester list, opt-in URL, matching Google account confirmation, delivered version, device/OS, install and offline-relaunch results, feedback disposition, TalkBack result, screenshot identity, final questionnaire answers, target track, and country availability. Stop if any unexpected permission, SDK, analytics, identifier, account flow, external URL, unresolved declaration, or `OWNER_REQUIRED` marker appears.

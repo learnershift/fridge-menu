@@ -16,11 +16,47 @@ function hasRemoteReference(source) {
   return /https?:\/\//i.test(folded) || /["'(]\s*\/\/[a-z0-9]/i.test(folded);
 }
 
+function hasExactTouchTarget(css) {
+  const blocks = [...css.matchAll(/\.remove-button\s*\{[^}]*\}/g)].map((match) => match[0]);
+  const block = blocks.join("\n");
+  const values = (property) => [...block.matchAll(new RegExp(`${property}\\s*:\\s*([^;}]*)`, "g"))]
+    .map((match) => match[1].trim());
+  const minWidths = values("min-width");
+  const minHeights = values("min-height");
+  const maximums = [...values("max-width"), ...values("max-height")];
+  return minWidths.length === 1 && minWidths[0] === "2.75rem" &&
+    minHeights.length === 1 && minHeights[0] === "2.75rem" &&
+    maximums.every((value) => value === "none");
+}
+
+function hasOnlyAllowedWebViewEntry(mainActivity) {
+  const withoutAllowedEntry = mainActivity.replace(/\b\w+\.loadUrl\s*\(\s*APP_ENTRY\s*\)\s*;/g, "");
+  return /private static final String APP_ENTRY = "file:\/\/\/android_asset\/pwa\/index\.html";/.test(mainActivity) &&
+    !/\.loadUrl\s*\(/.test(withoutAllowedEntry) &&
+    !/\b(?:HttpURLConnection|Socket|WebSocket|OkHttp|URLConnection)\b/.test(mainActivity);
+}
+
+function hasOnlyAllowedServiceWorkerFetch(serviceWorker) {
+  const withoutAllowedFetch = serviceWorker.replace(/\bfetch\s*\(\s*event\.request\s*\)/g, "");
+  return !/\bfetch\s*\(/.test(withoutAllowedFetch) &&
+    !/\b(?:importScripts|WebSocket|EventSource|XMLHttpRequest)\s*\(/.test(serviceWorker);
+}
+
+function hasRelativeAppShell(serviceWorker) {
+  const body = serviceWorker.match(/const APP_SHELL = Object\.freeze\(\[([\s\S]*?)\]\);/)?.[1];
+  if (!body || !/cache\.addAll\(APP_SHELL\)/.test(serviceWorker)) return false;
+  const entries = [...body.matchAll(/(["'])([^"']+)\1/g)].map((match) => match[2]);
+  const remainder = body.replace(/(["'])([^"']+)\1/g, "").replace(/[\s,]/g, "");
+  return !remainder && entries.length > 0 && entries.every((entry) => entry === "./" || /^\.\/[a-z0-9][a-z0-9._/-]*$/i.test(entry));
+}
+
 export function computeStaticReleaseChecks({ css, androidManifest, mainActivity, serviceWorker }) {
   return {
-    touch_target_static: pass(/\.remove-button\s*\{[^}]*min-width:\s*2\.75rem;[^}]*min-height:\s*2\.75rem;/.test(css)),
-    privacy_security_static: pass(!/uses-permission/i.test(androidManifest) && !hasRemoteReference(mainActivity) && !/addJavascriptInterface/.test(mainActivity)),
-    offline_static: pass(!hasRemoteReference(serviceWorker) && /file:\/\/\/android_asset\/pwa\/index\.html/.test(mainActivity)),
+    touch_target_static: pass(hasExactTouchTarget(css)),
+    privacy_security_static: pass(!/uses-permission/i.test(androidManifest) && !hasRemoteReference(mainActivity) &&
+      !/addJavascriptInterface/.test(mainActivity) && hasOnlyAllowedWebViewEntry(mainActivity)),
+    offline_static: pass(!hasRemoteReference(serviceWorker) && hasOnlyAllowedServiceWorkerFetch(serviceWorker) && hasRelativeAppShell(serviceWorker) &&
+      /file:\/\/\/android_asset\/pwa\/index\.html/.test(mainActivity)),
   };
 }
 

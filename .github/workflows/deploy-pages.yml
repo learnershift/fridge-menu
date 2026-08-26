@@ -2,6 +2,15 @@ name: Deploy GitHub Pages
 
 on:
   workflow_dispatch:
+    inputs:
+      approved_sha:
+        description: Exact main-branch Git SHA approved by the owner
+        required: true
+        type: string
+      approval_receipt:
+        description: Fresh owner approval evidence ID for this Pages deployment
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,11 +23,19 @@ concurrency:
 
 jobs:
   deploy:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      inputs.approved_sha == github.sha &&
+      vars.OWNER_APPROVED_PAGES_SHA == github.sha
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - name: Verify fresh target-bound owner gate
+        env:
+          APPROVAL_RECEIPT: ${{ inputs.approval_receipt }}
+        run: test -n "$APPROVAL_RECEIPT"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:

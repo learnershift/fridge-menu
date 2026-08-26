@@ -628,6 +628,7 @@ function boot() {
     } finally {
       installPrompt = undefined;
       installButton.hidden = true;
+      document.querySelector(".brand").focus();
     }
   });
   window.addEventListener("appinstalled", () => announce("Fridge Menu installed.", "success"));

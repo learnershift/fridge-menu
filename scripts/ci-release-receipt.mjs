@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
-import { fileEvidence, gitIdentity } from "./release-evidence-lib.mjs";
+import { digest, fileEvidence, gitIdentity } from "./release-evidence-lib.mjs";
 import { inspectAabSigning } from "./release-checks.mjs";
 
 const AAB_PATH = "android/app/build/outputs/bundle/release/app-release.aab";
@@ -18,7 +18,7 @@ function sameArtifact(left, right) {
     left?.sha256 === right?.sha256 && left?.signing === right?.signing;
 }
 
-export function validateCiReleaseProof({ expectedSha, source, aab, manifest, evidence, reproducibility }) {
+export function validateCiReleaseProof({ expectedSha, source, aab, manifest, manifestSha256, evidence, reproducibility }) {
   if (!expectedSha || expectedSha !== source.gitRevision) throw new Error("CI workflow SHA does not match the checked-out revision.");
   if (aab.signing !== "UNSIGNED") throw new Error("CI proof must contain an unsigned AAB.");
   if (manifest.gitRevision !== source.gitRevision || manifest.sourceTree !== source.sourceTree ||
@@ -31,8 +31,11 @@ export function validateCiReleaseProof({ expectedSha, source, aab, manifest, evi
       reproducibility.first_sha256 !== aab.sha256 || reproducibility.second_sha256 !== aab.sha256) {
     throw new Error("CI proof mismatch: artifact bytes or hashes differ.");
   }
+  if (!manifestSha256 || evidence.release_manifest_sha256 !== manifestSha256) {
+    throw new Error("CI proof mismatch: release manifest bytes differ from Android evidence.");
+  }
   if (evidence.submission_readiness !== "BLOCKED") throw new Error("Unsigned CI proof must remain blocked from Play submission.");
-  return "UNSIGNED_LOCAL_VERIFICATION_ONLY";
+  return true;
 }
 
 async function createReceipt(root, env) {
@@ -41,17 +44,20 @@ async function createReceipt(root, env) {
   if (missing.length) throw new Error(`CI receipt requires ${missing.join(", ")}.`);
 
   const source = gitIdentity(root);
-  const [reproducibility, manifest, evidence] = await Promise.all([
+  const [reproducibility, manifestBytes, evidence] = await Promise.all([
     readFile(resolve(root, PROOF_PATHS[1]), "utf8").then(JSON.parse),
-    readFile(resolve(root, PROOF_PATHS[2]), "utf8").then(JSON.parse),
+    readFile(resolve(root, PROOF_PATHS[2])),
     readFile(resolve(root, PROOF_PATHS[3]), "utf8").then(JSON.parse),
   ]);
+  const manifest = JSON.parse(manifestBytes.toString("utf8"));
   const aabFile = await fileEvidence(root, AAB_PATH);
   const aab = { ...aabFile, signing: inspectAabSigning(resolve(root, AAB_PATH)) };
-  const status = validateCiReleaseProof({ expectedSha: env.GITHUB_SHA, source, aab, manifest, evidence, reproducibility });
+  validateCiReleaseProof({ expectedSha: env.GITHUB_SHA, source, aab, manifest, manifestSha256: digest(manifestBytes), evidence, reproducibility });
+  const githubActions = env.GITHUB_ACTIONS === "true";
+  const status = githubActions ? "UNSIGNED_GITHUB_CI_VERIFICATION_ONLY" : "LOCAL_SIMULATION_ONLY";
   const artifacts = await Promise.all(PROOF_PATHS.map((path) => fileEvidence(root, path)));
   return {
-    schema: "fridge-menu-ci-release-receipt-v1",
+    schema: "fridge-menu-ci-release-receipt-v2",
     status,
     play_submission: "BLOCKED",
     ...source,
@@ -62,6 +68,11 @@ async function createReceipt(root, env) {
       run_id: env.GITHUB_RUN_ID,
       run_attempt: env.GITHUB_RUN_ATTEMPT,
       ref: env.GITHUB_REF ?? null,
+      execution: githubActions ? "GITHUB_ACTIONS" : "LOCAL_SIMULATION",
+      run_url: githubActions && env.GITHUB_SERVER_URL
+        ? `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`
+        : null,
+      workflow_ref: env.GITHUB_WORKFLOW_REF ?? null,
     },
     artifacts,
   };

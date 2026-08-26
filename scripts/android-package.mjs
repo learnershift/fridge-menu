@@ -28,7 +28,11 @@ await cp(resolve(root, "dist"), assets, { recursive: true });
 const env = { ...process.env, ANDROID_SDK_ROOT: sdk };
 if (process.argv.includes("--clean")) await rm(resolve(android, "app/build"), { recursive: true, force: true });
 const prewarm = process.argv.includes("--prewarm");
-const gradleArgs = [...(prewarm ? [] : ["--offline"]), "--no-daemon", "--rerun-tasks", ":app:bundleRelease"];
+const gradleArgs = [
+  ...(prewarm ? [] : ["--offline"]),
+  "--dependency-verification", "strict",
+  "--no-daemon", "--rerun-tasks", ":app:bundleRelease",
+];
 const result = spawnSync(gradle, gradleArgs, {
   cwd: android,
   stdio: "inherit",

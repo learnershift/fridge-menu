@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
+import { runtimeShellVersion } from "../scripts/runtime-shell.mjs";
 
 import {
   FAVORITES_LIMIT,
@@ -325,6 +326,7 @@ test("form errors identify and focus invalid fields and install results are anno
   assert.match(app, /invalidFields\[0\]\?\.focus\(\)/);
   assert.match(app, /installPrompt\.userChoice/);
   assert.match(app, /Installation (?:accepted|dismissed|could not be started)/);
+  assert.match(app, /document\.querySelector\("\.brand"\)\.focus\(\)/);
 });
 
 test("expired entries are refused before they reach local state", async () => {
@@ -354,7 +356,8 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v14"/);
+  assert.match(worker, new RegExp(`const CACHE_NAME = "fridge-menu-shell-${await runtimeShellVersion(root)}"`));
+  assert.match(worker, /event\.request\.mode === "navigate" \? caches\.match\("\.\/index\.html"\) : Response\.error\(\)/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
@@ -447,15 +450,18 @@ test("release checks are computed from source files and executed commands", asyn
   const fixture = {
     css: ".remove-button { min-width: 2.75rem; min-height: 2.75rem; }",
     androidManifest: "<manifest><application /></manifest>",
-    mainActivity: 'view.loadUrl("file:///android_asset/pwa/index.html");',
-    serviceWorker: 'const files = ["./index.html"];',
+    mainActivity: 'private static final String APP_ENTRY = "file:///android_asset/pwa/index.html"; view.loadUrl(APP_ENTRY);',
+    serviceWorker: 'const APP_SHELL = Object.freeze(["./index.html"]); cache.addAll(APP_SHELL);',
     adBoundary: "networkRequests: false; sdkLoaded: false; productionIdentifier: null;",
   };
   const passing = computeStaticReleaseChecks(fixture);
   assert.deepEqual(passing, { touch_target_static: "PASS", privacy_security_static: "PASS", offline_static: "PASS" });
   assert.equal(computeStaticReleaseChecks({ ...fixture, css: ".remove-button { padding: 0; }" }).touch_target_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, css: `${fixture.css} .remove-button { max-width: 1px; }` }).touch_target_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, androidManifest: "<uses-permission />" }).privacy_security_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'fetch("https://example.test")' }).offline_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: "fetch(String.fromCharCode(104,116,116,112))" }).offline_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadUrl(String.fromCharCode(104,116,116,112));` }).privacy_security_static, "FAIL");
 });
 
 test("Android evidence generator binds computed release checks and identity to the current artifact", async () => {
@@ -495,6 +501,7 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   const qaChecklist = await read("release/QA-CHECKLIST.md");
   const gitignore = await read(".gitignore");
   const wrapperProperties = await read("android/gradle/wrapper/gradle-wrapper.properties");
+  const verificationMetadata = await read("android/gradle/verification-metadata.xml");
   const wrapperJar = await readFile(resolve(root, "android/gradle/wrapper/gradle-wrapper.jar"));
 
   assert.equal(pkg.scripts["android:aab"], "node scripts/android-package.mjs");
@@ -514,6 +521,7 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(packaging, /FRIDGE_MENU_ANDROID_SDK/);
   assert.doesNotMatch(packaging, /FRIDGE_MENU_GRADLE|\? "gradle\.bat" : "gradle"/);
   assert.match(packaging, /inspectAabSigning/);
+  assert.match(packaging, /--dependency-verification", "strict/);
   assert.match(packaging, /do not create or import signing keys/i);
   assert.match(gitignore, /\*\.jks/);
   assert.match(gitignore, /\*\.keystore/);
@@ -541,6 +549,9 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(wrapperProperties, /gradle-8\.11\.1-bin\.zip/);
   assert.match(wrapperProperties, /distributionSha256Sum=f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6/);
   assert.equal(createHash("sha256").update(wrapperJar).digest("hex"), "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046");
+  assert.match(verificationMetadata, /<verify-metadata>true<\/verify-metadata>/);
+  assert.match(verificationMetadata, /<component group="com\.android\.tools\.build" name="gradle" version="8\.9\.1">/);
+  assert.match(verificationMetadata, /<sha256 value="[0-9a-f]{64}"/);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run build/);
   assert.match(workflow, /npm run verify:release/);
@@ -590,6 +601,11 @@ test("GitHub Pages publication is manual-only and deploys only the freshly built
 
   assert.match(workflow, /^\s*workflow_dispatch:\s*$/m);
   assert.doesNotMatch(workflow, /^\s*push:\s*$/m);
+  assert.match(workflow, /approved_sha:/);
+  assert.match(workflow, /approval_receipt:/);
+  assert.match(workflow, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(workflow, /inputs\.approved_sha == github\.sha/);
+  assert.match(workflow, /vars\.OWNER_APPROVED_PAGES_SHA == github\.sha/);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run build/);
   assert.match(workflow, /actions\/upload-pages-artifact@[0-9a-f]{40}/);
@@ -627,10 +643,14 @@ test("Android launcher artwork uses the canonical bowl and leaf palette instead 
 });
 
 test("Play upload icon is a 512px PNG derived from the canonical app artwork", async () => {
-  const icon = await readFile(resolve(root, "release/store-assets/fridge-menu-icon-512.png"));
+  const [icon, runtimeIcon] = await Promise.all([
+    readFile(resolve(root, "release/store-assets/fridge-menu-icon-512.png")),
+    readFile(resolve(root, "icon-512.png")),
+  ]);
   assert.deepEqual([...icon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.equal(icon.readUInt32BE(16), 512);
   assert.equal(icon.readUInt32BE(20), 512);
+  assert.deepEqual(icon, runtimeIcon);
 });
 
 test("PWA provides deterministic bitmap install icons", async () => {

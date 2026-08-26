@@ -6,6 +6,7 @@ const width = 1024;
 const height = 500;
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "release/store-assets/fridge-menu-feature-graphic-1024x500.png");
+const storeIconOutput = resolve(root, "release/store-assets/fridge-menu-icon-512.png");
 const pixels = Buffer.alloc(width * height * 3);
 const palette = {
   cream: [251, 248, 239], green: [23, 63, 53], leaf: [47, 125, 99],
@@ -113,4 +114,5 @@ function generateRuntimeIcon(size) {
 }
 
 for (const size of [192, 512]) await writeFile(resolve(root, `icon-${size}.png`), generateRuntimeIcon(size));
-console.log(`STORE_ASSET_OK path=${output} width=${width} height=${height}`);
+await writeFile(storeIconOutput, generateRuntimeIcon(512));
+console.log(`STORE_ASSET_OK feature=${output} icon=${storeIconOutput}`);
