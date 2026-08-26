@@ -18,6 +18,8 @@ export const MAX_STORED_TEXT_LENGTH = 512;
 const MAX_RAW_STORAGE_LENGTH = 128 * 1024;
 const INGREDIENT_NAME_LIMIT = 48;
 const SUGGESTIONS_LIMIT = 3;
+const MIN_HISTORY_TIMESTAMP = Date.UTC(2020, 0, 1);
+const MAX_HISTORY_TIMESTAMP = Date.UTC(2100, 0, 1);
 
 const VALID_URGENCIES = new Set(["use-now", "use-soon", "stable"]);
 const EMPTY_STATE = Object.freeze({ ingredients: [], favorites: [], history: [] });
@@ -67,11 +69,18 @@ function sanitizeSuggestion(value, historyId) {
   return { id, title, anchor, ingredients, useFirstReason, method };
 }
 
+export function isCanonicalHistoryTimestamp(value) {
+  if (typeof value !== "string") return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp >= MIN_HISTORY_TIMESTAMP && timestamp < MAX_HISTORY_TIMESTAMP &&
+    new Date(timestamp).toISOString() === value;
+}
+
 function sanitizeHistoryEntry(value) {
   if (!value || typeof value !== "object") return null;
   const id = validText(value.id);
   const createdAt = validText(value.createdAt);
-  if (!id || !createdAt || !Number.isFinite(Date.parse(createdAt)) || !Array.isArray(value.suggestions)) return null;
+  if (!id || !createdAt || !isCanonicalHistoryTimestamp(createdAt) || !Array.isArray(value.suggestions)) return null;
   const suggestionIds = new Set();
   const suggestions = value.suggestions.slice(0, SUGGESTIONS_LIMIT).map((suggestion) => sanitizeSuggestion(suggestion, id)).filter((suggestion) => {
     if (!suggestion || suggestionIds.has(suggestion.id)) return false;
@@ -164,6 +173,18 @@ export function serializeState(state) {
   return JSON.stringify({ version: STATE_VERSION, ...sanitizeState(state) });
 }
 
+export function writeStateIfUnchanged(storage, expectedRaw, state) {
+  try {
+    if (!storage || typeof storage.getItem !== "function" || typeof storage.setItem !== "function") return { status: "blocked", raw: expectedRaw };
+    if (storage.getItem(STORAGE_KEY) !== expectedRaw) return { status: "conflict", raw: expectedRaw };
+    const raw = serializeState(state);
+    storage.setItem(STORAGE_KEY, raw);
+    return { status: "saved", raw };
+  } catch {
+    return { status: "blocked", raw: expectedRaw };
+  }
+}
+
 export function loadState(storage, onError = () => {}) {
   try { return parseStoredState(storage?.getItem(STORAGE_KEY)); }
   catch { onError(); return emptyState(); }
@@ -233,15 +254,25 @@ function boot() {
 
   let storageReadBlocked = false;
   const storage = accessStorage(window, () => { storageReadBlocked = true; });
-  const restored = storage
-    ? loadState(storage, () => { storageReadBlocked = true; })
-    : emptyState();
+  let lastKnownRaw = null;
+  const restored = (() => {
+    if (!storage) return emptyState();
+    try {
+      lastKnownRaw = storage.getItem(STORAGE_KEY);
+      return parseStoredState(lastKnownRaw);
+    } catch {
+      storageReadBlocked = true;
+      return emptyState();
+    }
+  })();
   let ingredients = restored.ingredients;
   let favorites = restored.favorites;
   let history = restored.history;
   let currentSuggestions = history.at(-1)?.suggestions ?? [];
   let installPrompt;
   let dayRolloverTimer;
+  let lastPersistFailure = null;
+  let hasSessionOnlyChanges = false;
   let nextSequence = ingredients.reduce((max, item) => Math.max(max, item.sequence + 1), 0);
   let nextMenuSequence = history.length;
 
@@ -262,13 +293,17 @@ function boot() {
   }
 
   function persist() {
-    try {
-      if (!storage) throw new Error("Local storage unavailable");
-      storage.setItem(STORAGE_KEY, serializeState({ ingredients, favorites, history }));
-      return true;
-    } catch {
-      return false;
-    }
+    const result = writeStateIfUnchanged(storage, lastKnownRaw, { ingredients, favorites, history });
+    lastPersistFailure = result.status === "saved" ? null : result.status;
+    hasSessionOnlyChanges = result.status !== "saved";
+    if (result.status === "saved") lastKnownRaw = result.raw;
+    return result.status === "saved";
+  }
+
+  function persistenceFailureMessage(message) {
+    return lastPersistFailure === "conflict"
+      ? `${message} Another tab changed saved data; reload before saving again.`
+      : message;
   }
 
   function focusFavoriteButton(suggestionId) {
@@ -321,7 +356,7 @@ function boot() {
         focusFavoriteButton(suggestion.id);
         announce(saved
           ? active ? "Favorite removed." : "Meal idea favorited."
-          : `${active ? "Favorite removed" : "Meal idea favorited"} for this session only; local saving is blocked.`,
+          : persistenceFailureMessage(`${active ? "Favorite removed" : "Meal idea favorited"} for this session only; local saving is blocked.`),
         saved ? "success" : "warning");
       });
       content.append(favorite);
@@ -418,7 +453,7 @@ function boot() {
         renderFavorites();
         renderHistory();
         focusIngredientAfterRemoval(focusId);
-        announce(saved ? `${item.name} removed.` : `${item.name} removed for this session only; local saving is blocked.`, saved ? "neutral" : "warning");
+        announce(saved ? `${item.name} removed.` : persistenceFailureMessage(`${item.name} removed for this session only; local saving is blocked.`), saved ? "neutral" : "warning");
       });
       row.append(dot, ingredientName, expiry, remove);
       list.append(row);
@@ -478,7 +513,7 @@ function boot() {
     renderHistory();
     form.reset();
     nameInput.focus();
-    announce(saved ? `${name} added.` : `${name} added for this session only; local saving is blocked.`, saved ? "success" : "warning");
+    announce(saved ? `${name} added.` : persistenceFailureMessage(`${name} added for this session only; local saving is blocked.`), saved ? "success" : "warning");
   });
 
   suggestButton.addEventListener("click", () => {
@@ -491,7 +526,7 @@ function boot() {
     const saved = persist();
     renderSuggestions(generated);
     renderHistory();
-    announce(saved ? "Three offline use-first ideas are ready." : "Three ideas are ready for this session only; local saving is blocked.", saved ? "success" : "warning");
+    announce(saved ? "Three offline use-first ideas are ready." : persistenceFailureMessage("Three ideas are ready for this session only; local saving is blocked."), saved ? "success" : "warning");
     document.querySelector("#menu-heading").focus();
   });
 
@@ -503,7 +538,7 @@ function boot() {
     renderSuggestions();
     renderFavorites();
     renderHistory();
-    announce(saved ? "Fridge list cleared." : "Fridge list cleared for this session only; local saving is blocked.", saved ? "neutral" : "warning");
+    announce(saved ? "Fridge list cleared." : persistenceFailureMessage("Fridge list cleared for this session only; local saving is blocked."), saved ? "neutral" : "warning");
     nameInput.focus();
   });
 
@@ -526,6 +561,27 @@ function boot() {
     }
   });
   window.addEventListener("appinstalled", () => announce("Fridge Menu installed.", "success"));
+
+  window.addEventListener("storage", (event) => {
+    if (event.key !== STORAGE_KEY || event.newValue === lastKnownRaw) return;
+    if (hasSessionOnlyChanges) {
+      announce("Another tab changed saved data. This tab has session-only changes; reload before saving again.", "warning");
+      return;
+    }
+    const external = parseStoredState(event.newValue);
+    ingredients = external.ingredients;
+    favorites = external.favorites;
+    history = external.history;
+    currentSuggestions = history.at(-1)?.suggestions ?? [];
+    nextSequence = ingredients.reduce((max, item) => Math.max(max, item.sequence + 1), 0);
+    nextMenuSequence = history.length;
+    lastKnownRaw = event.newValue;
+    render();
+    renderSuggestions(currentSuggestions);
+    renderFavorites();
+    renderHistory();
+    announce("Updated from another tab.");
+  });
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;

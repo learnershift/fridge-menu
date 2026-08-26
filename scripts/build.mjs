@@ -5,6 +5,8 @@ const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "dist");
 const runtimeFiles = Object.freeze([
   "app.js",
+  "icon-192.png",
+  "icon-512.png",
   "icon.svg",
   "index.html",
   "manifest.webmanifest",

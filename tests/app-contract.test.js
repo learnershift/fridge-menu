@@ -12,6 +12,7 @@ import {
   loadState,
   loadIngredients,
   millisecondsUntilNextLocalDay,
+  isCanonicalHistoryTimestamp,
   accessStorage,
   bindSuggestionsToMenu,
   parseStoredIngredients,
@@ -20,6 +21,7 @@ import {
   serializeIngredients,
   serializeState,
   usableSuggestions,
+  writeStateIfUnchanged,
 } from "../app.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -125,6 +127,28 @@ test("browser storage access, duplicate identities, and invalid history fail clo
   const objectState = parseStoredState(objectNames);
   assert.deepEqual(objectState.ingredients, []);
   assert.deepEqual(objectState.history[0].suggestions, []);
+
+  assert.equal(isCanonicalHistoryTimestamp("2026-08-25T08:00:00.000Z"), true);
+  assert.equal(isCanonicalHistoryTimestamp("2026-08-25T08:00:00Z"), false);
+  assert.equal(isCanonicalHistoryTimestamp("2200-01-01T00:00:00.000Z"), false);
+  const invalidTimes = parseStoredState(JSON.stringify({
+    version: 2, ingredients: [], favorites: [], history: [
+      { id: "noncanonical", createdAt: "2026-08-25T08:00:00Z", suggestions: [] },
+      { id: "out-of-range", createdAt: "2200-01-01T00:00:00.000Z", suggestions: [] },
+    ],
+  }));
+  assert.deepEqual(invalidTimes.history, []);
+});
+
+test("stale tabs cannot overwrite a newer local snapshot", () => {
+  let raw = "newer-tab-state";
+  const storage = { getItem: () => raw, setItem: (_key, value) => { raw = value; } };
+  assert.deepEqual(writeStateIfUnchanged(storage, "stale-tab-state", { ingredients: [], favorites: [], history: [] }), { status: "conflict", raw: "stale-tab-state" });
+  assert.equal(raw, "newer-tab-state");
+  const saved = writeStateIfUnchanged(storage, "newer-tab-state", { ingredients: [], favorites: [], history: [] });
+  assert.equal(saved.status, "saved");
+  assert.equal(raw, saved.raw);
+  assert.equal(writeStateIfUnchanged(null, null, { ingredients: [], favorites: [], history: [] }).status, "blocked");
 });
 
 test("menu and favorite identities stay unique across history entries", () => {
@@ -304,13 +328,14 @@ test("offline shell contains only relative same-origin assets", async () => {
   assert.doesNotMatch(worker, /ad-boundary/);
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.start_url, "./");
-  assert.deepEqual(manifest.icons.map((icon) => icon.src), ["./icon.svg"]);
-  assert.ok(worker.includes('"./icon.svg"'));
+  assert.deepEqual(manifest.icons.map((icon) => icon.src), ["./icon-192.png", "./icon-512.png", "./icon.svg"]);
+  assert.deepEqual(manifest.icons.map((icon) => icon.purpose), ["any", "any", "any"]);
+  for (const asset of ["./icon-192.png", "./icon-512.png", "./icon.svg"]) assert.ok(worker.includes(`"${asset}"`));
 });
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v11"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v12"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
@@ -363,12 +388,14 @@ test("user values are rendered with textContent and browser workflow persists al
   assert.match(app, /ingredientName\.textContent = item\.name/);
   assert.match(app, /heading\.textContent = suggestion\.title/);
   assert.match(app, /expiryDate: expiryInput\.value/);
-  assert.match(app, /serializeState\(\{ ingredients, favorites, history \}\)/);
+  assert.match(app, /writeStateIfUnchanged\(storage, lastKnownRaw, \{ ingredients, favorites, history \}\)/);
   assert.match(app, /favorite-button/);
   assert.match(app, /history\.push/);
   assert.match(app, /beforeinstallprompt/);
   assert.ok((app.match(/const saved = persist\(\)/g) ?? []).length >= 5);
   assert.match(app, /for this session only; local saving is blocked\./);
+  assert.match(app, /window\.addEventListener\("storage"/);
+  assert.match(app, /Another tab changed saved data/);
 });
 
 test("package has no dependency or install surface", async () => {
@@ -580,6 +607,16 @@ test("Play upload icon is a 512px PNG derived from the canonical app artwork", a
   assert.equal(icon.readUInt32BE(20), 512);
 });
 
+test("PWA provides deterministic bitmap install icons", async () => {
+  for (const size of [192, 512]) {
+    const icon = await readFile(resolve(root, `icon-${size}.png`));
+    assert.deepEqual([...icon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    assert.equal(icon.readUInt32BE(16), size);
+    assert.equal(icon.readUInt32BE(20), size);
+    assert.equal(icon[25], 2, "PWA icons must be truecolor RGB without alpha");
+  }
+});
+
 test("Play feature graphic is a deterministic 1024 by 500 PNG", async () => {
   const graphic = await readFile(resolve(root, "release/store-assets/fridge-menu-feature-graphic-1024x500.png"));
   assert.deepEqual([...graphic.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
@@ -591,7 +628,7 @@ test("Play feature graphic is a deterministic 1024 by 500 PNG", async () => {
 test("source tree and build output stay inside the release allowlists", async () => {
   const top = (await readdir(root)).sort();
   assert.deepEqual(top.filter((name) => ![".git", ".hermes", "dist"].includes(name)), [
-    ".github", ".gitignore", "AGENTS.md", "README.md", "android", "app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "release", "scripts", "service-worker.js", "styles.css", "tests",
+    ".github", ".gitignore", "AGENTS.md", "README.md", "android", "app.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "release", "scripts", "service-worker.js", "styles.css", "tests",
   ]);
-  if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["app.js", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"]);
+  if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["app.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"]);
 });

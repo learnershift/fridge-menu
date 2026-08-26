@@ -69,4 +69,48 @@ for (let y = 0; y < height; y += 1) { raw[y * (width * 3 + 1)] = 0; pixels.copy(
 const header = Buffer.alloc(13); header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 2;
 await mkdir(resolve(root, "release/store-assets"), { recursive: true });
 await writeFile(output, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(raw, { level: 9 })), chunk("IEND", Buffer.alloc(0))]));
+
+function encodeRgbPng(imageWidth, imageHeight, imagePixels) {
+  const imageRaw = Buffer.alloc((imageWidth * 3 + 1) * imageHeight);
+  for (let y = 0; y < imageHeight; y += 1) {
+    imagePixels.copy(imageRaw, y * (imageWidth * 3 + 1) + 1, y * imageWidth * 3, (y + 1) * imageWidth * 3);
+  }
+  const imageHeader = Buffer.alloc(13);
+  imageHeader.writeUInt32BE(imageWidth, 0);
+  imageHeader.writeUInt32BE(imageHeight, 4);
+  imageHeader[8] = 8;
+  imageHeader[9] = 2;
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", imageHeader),
+    chunk("IDAT", deflateSync(imageRaw, { level: 9 })),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function generateRuntimeIcon(size) {
+  const image = Buffer.alloc(size * size * 3);
+  const put = (x, y, color) => {
+    if (x < 0 || y < 0 || x >= size || y >= size) return;
+    image.set(color, (y * size + x) * 3);
+  };
+  const fill = (color) => {
+    for (let y = 0; y < size; y += 1) for (let x = 0; x < size; x += 1) put(x, y, color);
+  };
+  const drawEllipse = (cx, cy, rx, ry, color) => {
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y += 1) {
+      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x += 1) {
+        if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) put(x, y, color);
+      }
+    }
+  };
+  fill(palette.green);
+  drawEllipse(size * 0.5, size * 0.5, size * 0.37, size * 0.37, palette.gold);
+  drawEllipse(size * 0.5, size * 0.61, size * 0.31, size * 0.2, palette.cream);
+  drawEllipse(size * 0.47, size * 0.39, size * 0.23, size * 0.13, palette.leaf);
+  drawEllipse(size * 0.57, size * 0.33, size * 0.12, size * 0.065, palette.lime);
+  return encodeRgbPng(size, size, image);
+}
+
+for (const size of [192, 512]) await writeFile(resolve(root, `icon-${size}.png`), generateRuntimeIcon(size));
 console.log(`STORE_ASSET_OK path=${output} width=${width} height=${height}`);
