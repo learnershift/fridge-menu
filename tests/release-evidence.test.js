@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 
 import {
   assertCleanGitTree,
+  assertGitIdentityUnchanged,
   assertDeepRegularFile,
   assertEvidenceAgreement,
   fileEvidence,
@@ -70,6 +71,8 @@ test("release checks reject concatenated remote URLs and use narrow check names"
   assert.equal(computeStaticReleaseChecks({ ...fixture, css: ".remove-button { min-width: 2.75rem; min-height: 2.75rem; transform: scale(0.01); }" }).touch_target_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadUrl(String.fromCharCode(104));` }).privacy_security_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadDataWithBaseURL("dynamic", "", "text/html", "UTF-8", null);` }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} Uri uri = new Uri.Builder().scheme("https").authority("evil.example").build();` }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.getClass().getMethod("load" + "Url", String.class).invoke(view, "dynamic");` }).privacy_security_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: "fetch(String.fromCharCode(104))" }).offline_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'globalThis["fe" + "tch"]("dynamic")' }).offline_static, "FAIL");
 });
@@ -84,6 +87,8 @@ test("reproducibility and manifest/evidence agreement fail closed", () => {
   const evidence = { source_revision: "head", source_tree: "tree", identity: manifest.identity, checks: manifest.checks, aab };
   assert.doesNotThrow(() => assertEvidenceAgreement(manifest, evidence, aab));
   assert.throws(() => assertEvidenceAgreement(manifest, { ...evidence, aab: { ...aab, sha256: "b".repeat(64) } }, aab), /evidence mismatch/i);
+  assert.doesNotThrow(() => assertGitIdentityUnchanged({ gitRevision: "head", sourceTree: "tree" }, { gitRevision: "head", sourceTree: "tree" }));
+  assert.throws(() => assertGitIdentityUnchanged({ gitRevision: "head", sourceTree: "tree" }, { gitRevision: "other", sourceTree: "tree" }), /identity changed/i);
 });
 
 test("CI receipt binds an unsigned proof bundle to the exact workflow SHA", () => {

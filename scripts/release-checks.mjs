@@ -34,7 +34,8 @@ function hasOnlyAllowedWebViewEntry(mainActivity) {
   return /private static final String APP_ENTRY = "file:\/\/\/android_asset\/pwa\/index\.html";/.test(mainActivity) &&
     !/\.loadUrl\s*\(/.test(withoutAllowedEntry) &&
     !/\.(?:loadData|loadDataWithBaseURL|postUrl|evaluateJavascript)\s*\(/.test(mainActivity) &&
-    !/\b(?:HttpURLConnection|Socket|WebSocket|OkHttp|URLConnection)\b/.test(mainActivity);
+    !/\b(?:HttpURLConnection|Socket|WebSocket|OkHttp|URLConnection|Uri\.Builder|Class\.forName|java\.lang\.reflect)\b/.test(mainActivity) &&
+    !/\b(?:getMethod|getDeclaredMethod|getMethods|getDeclaredMethods)\s*\(|\.\s*invoke\s*\(/.test(mainActivity);
 }
 
 function hasOnlyAllowedServiceWorkerFetch(serviceWorker) {

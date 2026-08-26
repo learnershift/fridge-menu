@@ -54,6 +54,10 @@ export function gitIdentity(root) {
   return { gitRevision: read("HEAD"), sourceTree: read("HEAD^{tree}") };
 }
 
+export function assertGitIdentityUnchanged(expected, actual) {
+  if (!isDeepStrictEqual(expected, actual)) throw new Error("Git source identity changed while release evidence was generated.");
+}
+
 export function verifyReproducibleBytes(first, second) {
   const firstSha256 = digest(first);
   const secondSha256 = digest(second);

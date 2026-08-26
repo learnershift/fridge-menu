@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { computeReleaseChecks, inspectAabSigning, requirePassingChecks } from "./release-checks.mjs";
 import {
   assertCleanGitTree,
+  assertGitIdentityUnchanged,
   fileEvidence,
   gitIdentity,
   inspectAabArtifact,
@@ -48,6 +49,9 @@ if (reproducibility.gitRevision !== source.gitRevision || reproducibility.source
     reproducibility.first_sha256 !== aab.sha256 || reproducibility.second_sha256 !== aab.sha256) {
   throw new Error("AAB reproducibility evidence is stale or mismatched.");
 }
+
+await assertCleanGitTree(root);
+assertGitIdentityUnchanged(source, gitIdentity(root));
 
 const releaseEvidence = {
   schemaVersion: 2,
