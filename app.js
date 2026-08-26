@@ -173,13 +173,16 @@ export function serializeState(state) {
   return JSON.stringify({ version: STATE_VERSION, ...sanitizeState(state) });
 }
 
-export async function commitStateTransaction(locks, storage, mutate) {
+export async function commitStateTransaction(locks, storage, mutate, options = {}) {
   try {
     if (!locks || typeof locks.request !== "function" || !storage ||
         typeof storage.getItem !== "function" || typeof storage.setItem !== "function") return { status: "blocked" };
     return await locks.request(`${STORAGE_KEY}:writer`, { mode: "exclusive" }, async () => {
       const currentRaw = storage.getItem(STORAGE_KEY);
       const current = parseStoredState(currentRaw);
+      if (Object.prototype.hasOwnProperty.call(options, "expectedRaw") && currentRaw !== options.expectedRaw) {
+        return { status: "conflict", raw: currentRaw, state: current };
+      }
       const next = mutate(current);
       if (!next) return { status: "conflict", raw: currentRaw, state: current };
       const raw = serializeState(next);
@@ -307,8 +310,9 @@ function boot() {
     nextMenuSequence = Math.max(nextMenuSequence, history.length);
   }
 
-  async function persist(mutate) {
-    const result = await commitStateTransaction(navigator.locks, storage, mutate);
+  async function persist(mutate, requireFresh = false) {
+    const options = requireFresh ? { expectedRaw: lastKnownRaw } : undefined;
+    const result = await commitStateTransaction(navigator.locks, storage, mutate, options);
     hasSessionOnlyChanges = result.status === "blocked";
     if (result.state) applyState(result.state);
     if (result.raw !== undefined) lastKnownRaw = result.raw;
@@ -402,7 +406,7 @@ function boot() {
         const result = await persist((state) => ({
           ...state,
           favorites: active ? state.favorites.filter((id) => id !== suggestion.id) : [...new Set([...state.favorites, suggestion.id])],
-        }));
+        }), true);
         renderSuggestions(currentSuggestions);
         renderFavorites();
         focusFavoriteButton(suggestion.id);
@@ -502,7 +506,7 @@ function boot() {
         const position = ordered.findIndex((candidate) => candidate.id === item.id);
         const focusId = ordered[position + 1]?.id ?? ordered[position - 1]?.id;
         ingredients = ingredients.filter((candidate) => candidate.id !== item.id);
-        const result = await persist((state) => ({ ...state, ingredients: state.ingredients.filter((candidate) => candidate.id !== item.id) }));
+        const result = await persist((state) => ({ ...state, ingredients: state.ingredients.filter((candidate) => candidate.id !== item.id) }), true);
         render();
         renderSuggestions();
         renderFavorites();
@@ -616,7 +620,7 @@ function boot() {
   clearButton.addEventListener("click", async () => {
     ingredients = [];
     nextSequence = 0;
-    const result = await persist((state) => ({ ...state, ingredients: [] }));
+    const result = await persist((state) => ({ ...state, ingredients: [] }), true);
     render();
     renderSuggestions();
     renderFavorites();

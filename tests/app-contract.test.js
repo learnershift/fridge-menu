@@ -171,6 +171,41 @@ test("cross-tab mutations serialize through one state writer", async () => {
   assert.equal((await commitStateTransaction(null, storage, (state) => state)).status, "blocked");
 });
 
+test("stale destructive and UI-dependent mutations fail closed after acquiring the writer lock", async () => {
+  const expectedRaw = serializeState({
+    ingredients: [{ id: "kale", name: "Kale", expiryDate: "2099-01-01", sequence: 0 }],
+    favorites: [],
+    history: [],
+  });
+  const latestState = {
+    ingredients: [
+      { id: "kale", name: "Kale", expiryDate: "2099-01-01", sequence: 0 },
+      { id: "tofu", name: "Tofu", expiryDate: "2099-01-02", sequence: 1 },
+    ],
+    favorites: [],
+    history: [],
+  };
+  let raw = serializeState(latestState);
+  const storage = { getItem: () => raw, setItem: (_key, value) => { raw = value; } };
+  const locks = { request: (_name, _options, callback) => callback() };
+
+  for (const mutate of [
+    (state) => ({ ...state, ingredients: [] }),
+    (state) => ({ ...state, ingredients: state.ingredients.filter((item) => item.id !== "kale") }),
+    (state) => ({ ...state, favorites: [...state.favorites, "stale-favorite"] }),
+  ]) {
+    let invoked = false;
+    const result = await commitStateTransaction(locks, storage, (state) => {
+      invoked = true;
+      return mutate(state);
+    }, { expectedRaw });
+    assert.equal(result.status, "conflict");
+    assert.equal(invoked, false, "a stale intent must not run its mutation callback");
+    assert.deepEqual(result.state, latestState, "the caller must receive the latest state for UI recovery");
+    assert.equal(raw, serializeState(latestState), "stale clear, remove, or favorite intent must not overwrite newer data");
+  }
+});
+
 test("menu and favorite identities stay unique across history entries", () => {
   const template = { id: "suggestion-1", title: "Skillet", anchor: "Kale", ingredients: ["Kale"], useFirstReason: "First.", method: "Cook." };
   const bound = bindSuggestionsToMenu("menu-a", [template])[0];
