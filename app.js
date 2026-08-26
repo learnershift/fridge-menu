@@ -531,6 +531,19 @@ function boot() {
     restoreDynamicFocus(focusSnapshot);
   }
 
+  function syncFromStorageIfChanged() {
+    if (!storage || hasSessionOnlyChanges) return "unchanged";
+    try {
+      const latestRaw = storage.getItem(STORAGE_KEY);
+      if (latestRaw === lastKnownRaw) return "unchanged";
+      applyState(parseStoredState(latestRaw));
+      lastKnownRaw = latestRaw;
+      return "updated";
+    } catch {
+      return "blocked";
+    }
+  }
+
   function scheduleDayRollover() {
     window.clearTimeout(dayRolloverTimer);
     dayRolloverTimer = window.setTimeout(() => {
@@ -650,8 +663,11 @@ function boot() {
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
+    const syncStatus = syncFromStorageIfChanged();
     refreshRenderedStatePreservingFocus();
     scheduleDayRollover();
+    if (syncStatus === "updated") announce("Updated from saved data after returning to this tab.");
+    if (syncStatus === "blocked") announce("Saved data could not be checked after returning to this tab.", "warning");
   });
 
   render();

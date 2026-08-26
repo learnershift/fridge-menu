@@ -21,6 +21,11 @@ export async function runtimeShellVersion(root) {
     hash.update(await readFile(resolve(root, name)));
     hash.update("\0");
   }
+  const workerPolicy = (await readFile(resolve(root, "service-worker.js"), "utf8"))
+    .replace(/const CACHE_NAME = "fridge-menu-shell-[^"]+";/, 'const CACHE_NAME = "fridge-menu-shell-<POLICY_DIGEST>";');
+  hash.update("service-worker-policy\0");
+  hash.update(workerPolicy);
+  hash.update("\0");
   return hash.digest("hex").slice(0, 16);
 }
 

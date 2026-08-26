@@ -424,6 +424,9 @@ test("user values are rendered with textContent and browser workflow persists al
   assert.match(app, /for this session only; safe multi-tab saving is unavailable\./);
   assert.match(app, /window\.addEventListener\("storage"/);
   assert.match(app, /event\.key !== STORAGE_KEY && event\.key !== null/);
+  assert.match(app, /function syncFromStorageIfChanged\(\)/);
+  assert.match(app, /const latestRaw = storage\.getItem\(STORAGE_KEY\)/);
+  assert.match(app, /Updated from saved data after returning to this tab\./);
   assert.match(app, /Another tab changed saved data/);
 });
 
@@ -458,10 +461,13 @@ test("release checks are computed from source files and executed commands", asyn
   assert.deepEqual(passing, { touch_target_static: "PASS", privacy_security_static: "PASS", offline_static: "PASS" });
   assert.equal(computeStaticReleaseChecks({ ...fixture, css: ".remove-button { padding: 0; }" }).touch_target_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, css: `${fixture.css} .remove-button { max-width: 1px; }` }).touch_target_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, css: ".remove-button { min-width: 2.75rem; min-height: 2.75rem; transform: scale(0.01); }" }).touch_target_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, androidManifest: "<uses-permission />" }).privacy_security_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'fetch("https://example.test")' }).offline_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: "fetch(String.fromCharCode(104,116,116,112))" }).offline_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'globalThis["fe" + "tch"]("dynamic")' }).offline_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadUrl(String.fromCharCode(104,116,116,112));` }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadDataWithBaseURL("dynamic", "", "text/html", "UTF-8", null);` }).privacy_security_static, "FAIL");
 });
 
 test("Android evidence generator binds computed release checks and identity to the current artifact", async () => {
@@ -539,6 +545,9 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(capture, /--lang=en-US/);
   assert.match(capture, /Emulation\.setLocaleOverride/);
   assert.match(capture, /Emulation\.setTimezoneOverride/);
+  assert.match(capture, /Emulation\.setEmulatedMedia/);
+  assert.match(capture, /prefers-reduced-motion/);
+  assert.match(capture, /document\.fonts\.ready/);
   assert.match(capture, /Page\.addScriptToEvaluateOnNewDocument/);
   assert.match(capture, /2026-08-25T08:00:00\.000Z/);
   assert.match(capture, /ingredient-expiry[^\n]*2099-01-02/);

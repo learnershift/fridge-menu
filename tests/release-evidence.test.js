@@ -15,6 +15,7 @@ import {
 } from "../scripts/release-evidence-lib.mjs";
 import { validateCiReleaseProof } from "../scripts/ci-release-receipt.mjs";
 import { computeStaticReleaseChecks } from "../scripts/release-checks.mjs";
+import { CACHED_SHELL_FILES, runtimeShellVersion } from "../scripts/runtime-shell.mjs";
 
 test("deep release evidence accepts regular files and rejects traversal and symlinks", async () => {
   const root = await mkdtemp(join(tmpdir(), "fridge-menu-evidence-"));
@@ -66,8 +67,11 @@ test("release checks reject concatenated remote URLs and use narrow check names"
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'fetch("ht" + "tps://evil.example/")' }).offline_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'importScripts("//evil.example/worker.js")' }).offline_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, css: `${fixture.css} .remove-button { max-height: 1px; }` }).touch_target_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, css: ".remove-button { min-width: 2.75rem; min-height: 2.75rem; transform: scale(0.01); }" }).touch_target_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadUrl(String.fromCharCode(104));` }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadDataWithBaseURL("dynamic", "", "text/html", "UTF-8", null);` }).privacy_security_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: "fetch(String.fromCharCode(104))" }).offline_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'globalThis["fe" + "tch"]("dynamic")' }).offline_static, "FAIL");
 });
 
 test("reproducibility and manifest/evidence agreement fail closed", () => {
@@ -95,4 +99,19 @@ test("CI receipt binds an unsigned proof bundle to the exact workflow SHA", () =
   assert.throws(() => validateCiReleaseProof({ ...proof, aab: { ...aab, signing: "SIGNED" } }), /unsigned/i);
   assert.throws(() => validateCiReleaseProof({ ...proof, manifest: { ...manifest, aab: { ...aab, sha256: "b".repeat(64) } } }), /proof mismatch/i);
   assert.throws(() => validateCiReleaseProof({ ...proof, manifestSha256: "b".repeat(64) }), /manifest bytes/i);
+});
+
+test("runtime cache identity binds shell bytes and normalized worker policy", async () => {
+  const root = await mkdtemp(join(tmpdir(), "fridge-menu-shell-"));
+  try {
+    for (const name of CACHED_SHELL_FILES) await writeFile(join(root, name), `fixture:${name}`);
+    await writeFile(join(root, "service-worker.js"), 'const CACHE_NAME = "fridge-menu-shell-one";\nconst POLICY = "cache-first";\n');
+    const first = await runtimeShellVersion(root);
+    await writeFile(join(root, "service-worker.js"), 'const CACHE_NAME = "fridge-menu-shell-two";\nconst POLICY = "cache-first";\n');
+    assert.equal(await runtimeShellVersion(root), first, "cache-name self reference must be normalized");
+    await writeFile(join(root, "service-worker.js"), 'const CACHE_NAME = "fridge-menu-shell-two";\nconst POLICY = "network-first";\n');
+    assert.notEqual(await runtimeShellVersion(root), first, "worker policy changes must rotate cache identity");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

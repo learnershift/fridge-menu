@@ -9,8 +9,8 @@ const url = process.env.FRIDGE_MENU_CAPTURE_URL || "http://127.0.0.1:4173";
 const captures = [
   { name: "01-empty-home", action: "window.scrollTo(0, 0)" },
   { name: "02-use-first-list", action: 'document.querySelector("#ingredient-expiry").value = "2099-01-02"; document.querySelector("#fridge-heading").scrollIntoView({ block: "start" })' },
-  { name: "03-menu-results", action: 'document.querySelector("#suggest-button").click(); document.querySelector("#menu-heading").scrollIntoView({ block: "start" })' },
-  { name: "04-favorites-history", action: 'document.querySelector("#suggest-button").click(); document.querySelector(".favorite-button").click(); document.querySelector("#favorites-heading").scrollIntoView({ block: "start" })' },
+  { name: "03-menu-results", action: '(async () => { document.querySelector("#suggest-button").click(); while (!document.querySelector("#suggestions .favorite-button")) await new Promise((resolve) => setTimeout(resolve, 25)); document.querySelector("#menu-heading").scrollIntoView({ block: "start" }); })()' },
+  { name: "04-favorites-history", action: '(async () => { document.querySelector("#suggest-button").click(); while (!document.querySelector("#suggestions .favorite-button")) await new Promise((resolve) => setTimeout(resolve, 25)); document.querySelector("#suggestions .favorite-button").click(); while (!document.querySelector("#favorites-list .meal-card")) await new Promise((resolve) => setTimeout(resolve, 25)); document.querySelector("#favorites-heading").scrollIntoView({ block: "start" }); })()' },
 ];
 const seededState = {
   version: 2,
@@ -94,6 +94,7 @@ try {
   await protocol.call("Runtime.enable");
   await protocol.call("Emulation.setLocaleOverride", { locale: "en-US" });
   await protocol.call("Emulation.setTimezoneOverride", { timezoneId: "UTC" });
+  await protocol.call("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
   await protocol.call("Page.addScriptToEvaluateOnNewDocument", { source: `
     {
       const fixedTime = Date.parse("2026-08-25T08:00:00.000Z");
@@ -116,7 +117,8 @@ try {
       ? 'localStorage.removeItem("fridge-menu:v1"); location.reload()'
       : `localStorage.setItem("fridge-menu:v1", ${JSON.stringify(storage)}); location.reload()` });
     await loaded;
-    await protocol.call("Runtime.evaluate", { expression: captures[index].action });
+    await protocol.call("Runtime.evaluate", { expression: captures[index].action, awaitPromise: true });
+    await protocol.call("Runtime.evaluate", { expression: "document.fonts.ready", awaitPromise: true });
     await protocol.call("Runtime.evaluate", { expression: "new Promise(resolve => setTimeout(resolve, 300))", awaitPromise: true });
     const screenshot = await protocol.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
     const output = resolve(outputDir, `fridge-menu-${captures[index].name}-1080x1920.png`);

@@ -26,20 +26,23 @@ function hasExactTouchTarget(css) {
   const maximums = [...values("max-width"), ...values("max-height")];
   return minWidths.length === 1 && minWidths[0] === "2.75rem" &&
     minHeights.length === 1 && minHeights[0] === "2.75rem" &&
-    maximums.every((value) => value === "none");
+    maximums.every((value) => value === "none") && !/(?:transform|zoom)\s*:/.test(block);
 }
 
 function hasOnlyAllowedWebViewEntry(mainActivity) {
   const withoutAllowedEntry = mainActivity.replace(/\b\w+\.loadUrl\s*\(\s*APP_ENTRY\s*\)\s*;/g, "");
   return /private static final String APP_ENTRY = "file:\/\/\/android_asset\/pwa\/index\.html";/.test(mainActivity) &&
     !/\.loadUrl\s*\(/.test(withoutAllowedEntry) &&
+    !/\.(?:loadData|loadDataWithBaseURL|postUrl|evaluateJavascript)\s*\(/.test(mainActivity) &&
     !/\b(?:HttpURLConnection|Socket|WebSocket|OkHttp|URLConnection)\b/.test(mainActivity);
 }
 
 function hasOnlyAllowedServiceWorkerFetch(serviceWorker) {
   const withoutAllowedFetch = serviceWorker.replace(/\bfetch\s*\(\s*event\.request\s*\)/g, "");
+  const folded = foldStringConcatenations(withoutAllowedFetch);
   return !/\bfetch\s*\(/.test(withoutAllowedFetch) &&
-    !/\b(?:importScripts|WebSocket|EventSource|XMLHttpRequest)\s*\(/.test(serviceWorker);
+    !/\b(?:importScripts|WebSocket|EventSource|XMLHttpRequest)\s*\(/.test(serviceWorker) &&
+    !/\[\s*["']fetch["']\s*\]|String\.fromCharCode|\batob\s*\(|Reflect\.get\s*\(/.test(folded);
 }
 
 function hasRelativeAppShell(serviceWorker) {
