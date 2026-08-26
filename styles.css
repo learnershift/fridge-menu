@@ -73,6 +73,7 @@ input::placeholder { color: #596a64; }
 .ingredient-item__name { font-weight: 800; }
 .urgency-label { color: var(--muted); font-size: 0.76rem; text-transform: capitalize; }
 .remove-button { min-width: 2.75rem; min-height: 2.75rem; border: 0; background: transparent; color: #8b3c2d; padding: 0.45rem; font-size: 0.78rem; font-weight: 800; }
+.history-button { width: 100%; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 0.7rem; background: white; color: var(--ink); padding: 0.7rem 0.8rem; text-align: left; }
 .use-first-box { margin-top: 1rem; padding: 1rem; background: var(--green-soft); border-radius: 0.8rem; }
 .use-first-box span { display: block; color: #276454; text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.68rem; font-weight: 800; }
 .use-first-box p { margin: 0.4rem 0 0; line-height: 1.5; overflow-wrap: anywhere; }

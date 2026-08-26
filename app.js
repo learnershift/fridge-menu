@@ -209,6 +209,13 @@ export function saveIngredients(storage, ingredients) {
   } catch { return false; }
 }
 
+export function millisecondsUntilNextLocalDay(now = new Date()) {
+  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new TypeError("A valid Date is required.");
+  const nextDay = new Date(now);
+  nextDay.setHours(24, 0, 0, 50);
+  return Math.max(1, nextDay.getTime() - now.getTime());
+}
+
 function boot() {
   const form = document.querySelector("#ingredient-form");
   const nameInput = document.querySelector("#ingredient-name");
@@ -234,12 +241,24 @@ function boot() {
   let history = restored.history;
   let currentSuggestions = history.at(-1)?.suggestions ?? [];
   let installPrompt;
+  let dayRolloverTimer;
   let nextSequence = ingredients.reduce((max, item) => Math.max(max, item.sequence + 1), 0);
   let nextMenuSequence = history.length;
 
   function announce(message, tone = "neutral") {
     status.textContent = message;
     status.dataset.tone = tone;
+  }
+
+  function clearFormErrors(fields = [nameInput, expiryInput]) {
+    fields.forEach((field) => field.removeAttribute("aria-invalid"));
+  }
+
+  function showFormError(message, invalidFields) {
+    clearFormErrors();
+    invalidFields.forEach((field) => field.setAttribute("aria-invalid", "true"));
+    announce(message, "error");
+    invalidFields[0]?.focus();
   }
 
   function persist() {
@@ -413,21 +432,44 @@ function boot() {
     useFirst.textContent = ordered.map((item) => item.name).join(" → ") || "Your use-first order will appear here.";
   }
 
+  function scheduleDayRollover() {
+    window.clearTimeout(dayRolloverTimer);
+    dayRolloverTimer = window.setTimeout(() => {
+      render();
+      renderSuggestions(currentSuggestions);
+      renderFavorites();
+      renderHistory();
+      announce("Freshness updated for a new day.");
+      scheduleDayRollover();
+    }, millisecondsUntilNextLocalDay());
+  }
+
+  form.addEventListener("input", (event) => {
+    if (event.target === nameInput || event.target === expiryInput) clearFormErrors([event.target]);
+  });
+
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const name = normalizeName(nameInput.value);
     if (!name || !expiryInput.value) {
-      announce("Enter an ingredient and expiry date.", "error");
+      const invalidFields = [!name && nameInput, !expiryInput.value && expiryInput].filter(Boolean);
+      showFormError("Enter an ingredient and expiry date.", invalidFields);
       return;
     }
     if (getExpiryStatus(expiryInput.value) === "expired") {
-      announce("Remove expired ingredients before adding new ones.", "error");
+      showFormError("Remove expired ingredients before adding new ones.", [expiryInput]);
       return;
     }
     if (ingredients.length >= MAX_INGREDIENTS || ingredients.some((item) => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) {
-      announce(ingredients.length >= MAX_INGREDIENTS ? "Your fridge list is full." : `“${name}” is already in your fridge.`, "error");
+      if (ingredients.length >= MAX_INGREDIENTS) {
+        showFormError("Your fridge list is full.", []);
+        clearButton.focus();
+      } else {
+        showFormError(`“${name}” is already in your fridge.`, [nameInput]);
+      }
       return;
     }
+    clearFormErrors();
     ingredients.push({ id: `ingredient-${Date.now()}-${nextSequence}`, name, expiryDate: expiryInput.value, sequence: nextSequence++ });
     const saved = persist();
     render();
@@ -472,10 +514,18 @@ function boot() {
   });
   installButton.addEventListener("click", async () => {
     if (!installPrompt) return;
-    await installPrompt.prompt();
-    installPrompt = undefined;
-    installButton.hidden = true;
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      announce(choice?.outcome === "accepted" ? "Installation accepted." : "Installation dismissed.", choice?.outcome === "accepted" ? "success" : "neutral");
+    } catch {
+      announce("Installation could not be started.", "warning");
+    } finally {
+      installPrompt = undefined;
+      installButton.hidden = true;
+    }
   });
+  window.addEventListener("appinstalled", () => announce("Fridge Menu installed.", "success"));
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
@@ -483,12 +533,14 @@ function boot() {
     renderSuggestions(currentSuggestions);
     renderFavorites();
     renderHistory();
+    scheduleDayRollover();
   });
 
   render();
   renderSuggestions(currentSuggestions);
   renderFavorites();
   renderHistory();
+  scheduleDayRollover();
   announce(storageReadBlocked
     ? "This browser blocked local storage; changes last only for this session."
     : ingredients.length ? `Restored ${ingredients.length} locally saved ingredients.` : "Ready for your ingredients.",

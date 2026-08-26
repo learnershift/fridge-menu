@@ -10,6 +10,7 @@ import {
   STORAGE_KEY,
   loadState,
   loadIngredients,
+  millisecondsUntilNextLocalDay,
   accessStorage,
   bindSuggestionsToMenu,
   parseStoredIngredients,
@@ -183,6 +184,9 @@ test("ingredient changes and day rollover revalidate rendered history and favori
   assert.match(app, /remove\.addEventListener\("click",[\s\S]*?renderSuggestions\(\);\s*renderFavorites\(\);\s*renderHistory\(\);/);
   assert.match(app, /clearButton\.addEventListener\("click",[\s\S]*?renderSuggestions\(\);\s*renderFavorites\(\);\s*renderHistory\(\);/);
   assert.match(app, /document\.addEventListener\("visibilitychange"[\s\S]*?renderSuggestions\(currentSuggestions\);\s*renderFavorites\(\);\s*renderHistory\(\);/);
+  assert.match(app, /scheduleDayRollover/);
+  assert.equal(millisecondsUntilNextLocalDay(new Date(2026, 7, 25, 23, 59, 59, 900)), 150);
+  assert.equal(millisecondsUntilNextLocalDay(new Date(2026, 7, 25, 12, 0, 0, 0)), 43_200_050);
 });
 
 test("HTML contains semantic accessible pantry favorites history and install controls", async () => {
@@ -194,6 +198,8 @@ test("HTML contains semantic accessible pantry favorites history and install con
   assert.match(html, /Content-Security-Policy/);
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /aria-label="Ingredient count: 0 of 8"/);
+  assert.match(html, /id="ingredient-name"[^>]*aria-describedby="status-message"/);
+  assert.match(html, /id="ingredient-expiry"[^>]*aria-describedby="status-message"/);
 });
 
 test("privacy policy is available in-app and keeps owner-only identity values explicit", async () => {
@@ -266,6 +272,15 @@ test("release UI color tokens meet WCAG text and non-text contrast floors", asyn
 test("remove control guarantees a 44 by 44 pixel touch target", async () => {
   const css = await read("styles.css");
   assert.match(css, /\.remove-button\s*\{[^}]*min-width:\s*2\.75rem;[^}]*min-height:\s*2\.75rem;/);
+  assert.match(css, /\.history-button\s*\{[^}]*min-height:\s*2\.75rem;/);
+});
+
+test("form errors identify and focus invalid fields and install results are announced", async () => {
+  const app = await read("app.js");
+  assert.match(app, /field\.setAttribute\("aria-invalid", "true"\)/);
+  assert.match(app, /invalidFields\[0\]\?\.focus\(\)/);
+  assert.match(app, /installPrompt\.userChoice/);
+  assert.match(app, /Installation (?:accepted|dismissed|could not be started)/);
 });
 
 test("expired entries are refused before they reach local state", async () => {
@@ -294,7 +309,7 @@ test("offline shell contains only relative same-origin assets", async () => {
 
 test("service-worker cache version is bumped for the current runtime shell", async () => {
   const worker = await read("service-worker.js");
-  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v10"/);
+  assert.match(worker, /const CACHE_NAME = "fridge-menu-shell-v11"/);
 });
 
 test("unfinished advertising UI and runtime code are absent", async () => {
