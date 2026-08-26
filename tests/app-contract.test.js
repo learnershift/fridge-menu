@@ -522,6 +522,8 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   for (const variable of ["FRIDGE_MENU_KEYSTORE_PATH", "FRIDGE_MENU_KEYSTORE_PASSWORD", "FRIDGE_MENU_KEY_ALIAS", "FRIDGE_MENU_KEY_PASSWORD"]) {
     assert.match(androidBuild, new RegExp(variable));
   }
+  assert.match(androidBuild, /configuredKeystore\.toPath\(\)\.startsWith\(rootProject\.projectDir\.parentFile\.canonicalFile\.toPath\(\)\)/);
+  assert.match(androidBuild, /Release keystore must be outside the repository\./);
   assert.match(androidBuild, /applicationId\s*=\s*"com.learnershift.fridgemenu"/);
   assert.match(androidRootBuild, /com\.android\.application"\) version "8\.9\.1"/);
   assert.match(packaging, /FRIDGE_MENU_ANDROID_SDK/);
@@ -571,6 +573,7 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.doesNotMatch(workflow, /secrets\./);
   assert.match(privacy, /no account, analytics, advertising SDK, tracking, or remote API/i);
   assert.match(listing, /Short description/);
+  assert.doesNotMatch(listing, /choose what needs using first/i);
   assert.match(dataSafety, /No data collected or shared/);
   assert.match(handoff, /Google Play Console/);
   for (const required of [

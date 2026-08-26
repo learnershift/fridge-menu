@@ -25,11 +25,17 @@ android {
   if (releaseSigningRequested && !releaseSigningConfigured) {
     throw GradleException("Release signing requires all FRIDGE_MENU_KEYSTORE_* environment variables.")
   }
+  val configuredKeystore = if (releaseSigningConfigured) {
+    file(releaseSigningValues.getValue("storeFile")!!).canonicalFile
+  } else null
+  if (configuredKeystore != null && configuredKeystore.toPath().startsWith(rootProject.projectDir.parentFile.canonicalFile.toPath())) {
+    throw GradleException("Release keystore must be outside the repository.")
+  }
 
   signingConfigs {
     create("release") {
       if (releaseSigningConfigured) {
-        storeFile = file(releaseSigningValues.getValue("storeFile")!!)
+        storeFile = configuredKeystore
         storePassword = releaseSigningValues.getValue("storePassword")
         keyAlias = releaseSigningValues.getValue("keyAlias")
         keyPassword = releaseSigningValues.getValue("keyPassword")

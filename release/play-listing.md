@@ -8,7 +8,7 @@ Use what you have first with three simple, offline meal directions.
 
 Full description:
 
-Fridge Menu turns the ingredients already in your fridge into three calm, practical meal directions. Add three to eight ingredients, choose what needs using first, and get dependable ideas without random suggestions.
+Fridge Menu turns the ingredients already in your fridge into three calm, practical meal directions. Add three to eight ingredients with expiry dates, and get dependable ideas led by what needs using first without random suggestions.
 
 Your pantry stays on your device. Fridge Menu has no account, analytics, tracking, advertising SDK, or remote API. It works offline after installation and never asks you to share your ingredients.
 
