@@ -93,7 +93,18 @@ test("suggestions are deterministic, distinct, and keep the use-first ingredient
   assert.equal(new Set(first.map((item) => item.method)).size, 3, "the three cooking methods must be genuinely different");
   for (const suggestion of first) {
     assert.deepEqual(suggestion.ingredients, ["Spinach", "Tofu", "Mushrooms", "Rice"]);
+    assert.ok(suggestion.minutes >= 10 && suggestion.minutes <= 30);
+    assert.ok(["easy", "normal"].includes(suggestion.difficulty));
   }
+});
+
+test("suggestions support a deterministic offset for the next three ranked templates", () => {
+  const first = generateSuggestions(sample, undefined, "en");
+  const alternatives = generateSuggestions(sample, undefined, "en", { offset: 3 });
+  assert.equal(alternatives.length, 3);
+  assert.deepEqual(alternatives, generateSuggestions(structuredClone(sample), undefined, "en", { offset: 3 }));
+  assert.deepEqual(alternatives.map((item) => item.id), ["suggestion-4", "suggestion-5", "suggestion-6"]);
+  assert.ok(alternatives.every((item) => !first.some((primary) => primary.title === item.title)));
 });
 
 test("suggestions adapt to what the ingredients actually are", () => {

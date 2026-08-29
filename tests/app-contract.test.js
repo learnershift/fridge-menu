@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { runtimeShellVersion } from "../scripts/runtime-shell.mjs";
+import { generateSuggestions } from "../meal-engine.js";
 
 import {
   FAVORITES_LIMIT,
@@ -16,6 +17,7 @@ import {
   isCanonicalHistoryTimestamp,
   accessStorage,
   bindSuggestionsToMenu,
+  recoverSuggestionMetadata,
   parseStoredIngredients,
   parseStoredState,
   saveIngredients,
@@ -372,14 +374,14 @@ test("form errors identify and focus invalid fields and install results are anno
 
 test("expired entries are refused before they reach local state", async () => {
   const [app, i18n] = await Promise.all([read("app.js"), read("i18n.js")]);
-  assert.match(app, /getExpiryStatus\(expiryInput\.value\) === "expired"/);
+  assert.match(app, /expiryDate && getExpiryStatus\(expiryDate\) === "expired"/);
   assert.match(app, /t\("errorExpiredNotAdded"\)/);
   assert.match(i18n, /Remove expired ingredients before adding new ones\./);
 });
 
 test("expiry date is optional and undated ingredients fall back to stable urgency", async () => {
   const [app, html] = await Promise.all([read("app.js"), read("index.html")]);
-  assert.match(app, /expiryInput\.value && getExpiryStatus\(expiryInput\.value\) === "expired"/);
+  assert.match(app, /await addIngredient\(nameInput\.value, expiryInput\.value\)/);
   assert.match(app, /urgency: "stable", sequence: nextSequence\+\+/);
   assert.doesNotMatch(html, /id="ingredient-expiry"[^>]*\srequired/);
   assert.match(html, /data-i18n="expiryLabel"/);
@@ -389,7 +391,7 @@ test("UI is fully localized with matching English and Korean string tables", asy
   const [app, html] = await Promise.all([read("app.js"), read("index.html")]);
   const { STRINGS, translate, detectLocale, normalizeLocale } = await import("../i18n.js");
   assert.deepEqual(Object.keys(STRINGS.ko).sort(), Object.keys(STRINGS.en).sort(), "every English string needs a Korean counterpart");
-  for (const key of ["heroCopy", "menuIntro", "privacyCopy", "menuReady", "errorDuplicate", "suggestionsEmpty"]) {
+  for (const key of ["heroCopy", "menuIntro", "privacyCopy", "menuReady", "errorDuplicate", "suggestionsEmpty", "quickIngredientEgg", "otherMenus", "mealMeta"]) {
     assert.match(STRINGS.ko[key], /[가-힣]/, `Korean table entry ${key} must be Korean`);
   }
   assert.equal(translate("ko", "ingredientAdded", { name: "계란" }), "‘계란’ 담았어요.");
@@ -401,10 +403,61 @@ test("UI is fully localized with matching English and Korean string tables", asy
   assert.match(app, /langToggle\.addEventListener\("click"/);
   assert.match(app, /saveStoredLocale\(storage, locale\)/);
   assert.match(app, /generateSuggestions\(ingredients, undefined, locale\)/);
+  assert.match(app, /generateSuggestions\(ingredients, undefined, locale, \{ offset: 3 \}\)/);
   assert.match(html, /id="lang-toggle"/);
+  assert.match(html, /id="quick-ingredients"/);
+  assert.match(html, /id="alternative-menus-button"/);
   for (const key of ["skipLink", "heroCopy", "fridgeHeading", "menuHeading", "privacyCopy", "footerText"]) {
     assert.match(html, new RegExp(`data-i18n="${key}"`), `index.html must localize ${key}`);
   }
+});
+
+test("quick ingredient chips and menu metadata stay local, accessible, and deterministic", async () => {
+  const [app, html, css] = await Promise.all([read("app.js"), read("index.html"), read("styles.css")]);
+  const { STRINGS } = await import("../i18n.js");
+  const quickKeys = Object.keys(STRINGS.en).filter((key) => key.startsWith("quickIngredient") && key !== "quickIngredientsHeading");
+  assert.equal(quickKeys.length, 24);
+  assert.deepEqual(quickKeys.map((key) => STRINGS.en[key]), ["Egg", "Kimchi", "Onion", "Tofu", "Scallion", "Mushrooms", "Potato", "Carrot", "Zucchini", "Bean sprouts", "Spinach", "Tomato", "Rice", "Noodles", "Bread", "Ham", "Bacon", "Tuna", "Chicken", "Pork", "Beef", "Cheese", "Milk", "Fish cake"]);
+  assert.deepEqual(quickKeys.map((key) => STRINGS.ko[key]), ["계란", "김치", "양파", "두부", "대파", "버섯", "감자", "당근", "애호박", "콩나물", "시금치", "토마토", "밥", "면", "식빵", "햄", "베이컨", "참치", "닭고기", "돼지고기", "소고기", "치즈", "우유", "어묵"]);
+  assert.match(app, /const QUICK_INGREDIENT_KEYS = Object\.freeze\(\[/);
+  assert.match(app, /quickIngredient\$\{key\}/);
+  assert.match(app, /chip\.disabled = ingredients\.length >= MAX_INGREDIENTS \|\| ingredients\.some/);
+  assert.match(app, /quickIngredientNames\(key\)/);
+  assert.match(app, /badge\.textContent = t\("mealMeta", \{ minutes: metadata\.minutes, difficulty: t\(`difficulty\.\$\{metadata\.difficulty\}`\) \}\)/);
+  assert.match(app, /mealCard\(item, !preserveCurrentSuggestions\)/);
+  assert.match(html, /id="quick-ingredients"/);
+  assert.match(html, /id="alternative-menus-button"/);
+  assert.match(css, /\.quick-ingredient-chips/);
+  assert.match(css, /\.quick-ingredient-chip\s*\{[^}]*min-height:\s*2\.75rem;/);
+  assert.match(css, /\.meal-meta/);
+});
+
+test("menu metadata is display-only and does not change the persisted suggestion shape", () => {
+  const state = parseStoredState(serializeState({
+    ingredients: [{ id: "egg", name: "Egg", urgency: "stable", sequence: 0 }],
+    favorites: [],
+    history: [{
+      id: "menu-1", createdAt: "2026-08-29T00:00:00.000Z",
+      suggestions: [{ id: "menu-1:suggestion-1", title: "Egg bowl", anchor: "Egg", ingredients: ["Egg"], useFirstReason: "Egg first.", method: "Cook.", minutes: 15, difficulty: "easy" }],
+    }],
+  }));
+  assert.deepEqual(Object.keys(state.history[0].suggestions[0]).sort(), ["anchor", "id", "ingredients", "method", "title", "useFirstReason"].sort());
+});
+
+test("stored primary suggestions deterministically recover display metadata without changing history", () => {
+  const generated = generateSuggestions([
+    { id: "egg", name: "Egg", urgency: "use-now", sequence: 0 },
+    { id: "rice", name: "Rice", urgency: "stable", sequence: 1 },
+    { id: "spinach", name: "Spinach", urgency: "use-soon", sequence: 2 },
+  ]);
+  const bound = bindSuggestionsToMenu("menu-1", generated)[0];
+  const restored = parseStoredState(serializeState({
+    ingredients: [{ id: "egg", name: "Egg", urgency: "stable", sequence: 0 }], favorites: [],
+    history: [{ id: "menu-1", createdAt: "2026-08-29T00:00:00.000Z", suggestions: [bound] }],
+  })).history[0].suggestions[0];
+  assert.deepEqual(recoverSuggestionMetadata(restored), { minutes: generated[0].minutes, difficulty: generated[0].difficulty });
+  assert.equal(recoverSuggestionMetadata({ ...restored, id: "menu-1:suggestion-x" }), null);
+  assert.equal(recoverSuggestionMetadata({ ...restored, ingredients: ["Egg", "Rice"] }), null);
 });
 
 test("README documents date-backed sorting and expired-ingredient exclusion", async () => {
@@ -486,7 +539,7 @@ test("user values are rendered with textContent and browser workflow persists al
   assert.doesNotMatch(app, /innerHTML\s*=/);
   assert.match(app, /ingredientName\.textContent = item\.name/);
   assert.match(app, /heading\.textContent = suggestion\.title/);
-  assert.match(app, /expiryDate: expiryInput\.value/);
+  assert.match(app, /\{ id: `ingredient-\$\{tabId\}-\$\{nextSequence\}`, name, expiryDate, sequence: nextSequence\+\+ \}/);
   assert.match(app, /commitStateTransaction\(navigator\.locks, storage/);
   assert.match(app, /nextMenuSequence = Math\.max\(nextMenuSequence, history\.length\)/);
   assert.match(app, /favorite-button/);

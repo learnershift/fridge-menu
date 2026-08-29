@@ -56,6 +56,10 @@
           </div>
           <button class="button button--primary" type="submit" data-i18n="addIngredient">Add ingredient</button>
         </form>
+        <div class="quick-ingredients" aria-labelledby="quick-ingredients-heading">
+          <p id="quick-ingredients-heading" class="quick-ingredients__heading" data-i18n="quickIngredientsHeading">Common ingredients</p>
+          <div id="quick-ingredients" class="quick-ingredient-chips"></div>
+        </div>
 
         <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
         <ol id="ingredient-list" class="ingredient-list" aria-label="Ingredients, sorted by use-first priority" data-i18n-aria-label="ingredientListAria"></ol>
@@ -80,6 +84,7 @@
         </div>
         <p class="section-intro" data-i18n="menuIntro">These are adaptable cooking directions, not recipes or nutrition advice. Use pantry basics and season to your needs.</p>
         <div id="suggestions" class="suggestions" aria-live="polite"></div>
+        <button id="alternative-menus-button" class="button button--quiet alternative-menus-button" type="button" hidden></button>
       </section>
     </div>
 

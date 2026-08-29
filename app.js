@@ -25,6 +25,10 @@ export const MAX_STORED_TEXT_LENGTH = 512;
 const MAX_RAW_STORAGE_LENGTH = 128 * 1024;
 const INGREDIENT_NAME_LIMIT = 48;
 const SUGGESTIONS_LIMIT = 3;
+const QUICK_INGREDIENT_KEYS = Object.freeze([
+  "Egg", "Kimchi", "Onion", "Tofu", "Scallion", "Mushrooms", "Potato", "Carrot", "Zucchini", "BeanSprouts", "Spinach", "Tomato",
+  "Rice", "Noodles", "Bread", "Ham", "Bacon", "Tuna", "Chicken", "Pork", "Beef", "Cheese", "Milk", "FishCake",
+]);
 const MIN_HISTORY_TIMESTAMP = Date.UTC(2020, 0, 1);
 const MAX_HISTORY_TIMESTAMP = Date.UTC(2100, 0, 1);
 
@@ -234,6 +238,21 @@ export function bindSuggestionsToMenu(menuId, suggestions) {
   return suggestions.map((suggestion) => ({ ...suggestion, id: `${validMenuId}:${suggestion.id}` }));
 }
 
+export function recoverSuggestionMetadata(suggestion) {
+  const match = /(?:^|:)suggestion-(\d+)$/.exec(validText(suggestion?.id) ?? "");
+  const rank = Number(match?.[1]);
+  if (!Number.isSafeInteger(rank) || rank < 1 || !Array.isArray(suggestion?.ingredients)) return null;
+  const names = suggestion.ingredients.map(validName);
+  if (names.length < MIN_INGREDIENTS || names.length > MAX_INGREDIENTS || names.some((name) => !name)) return null;
+  const keys = names.map((name) => name.toLocaleLowerCase("en-US"));
+  if (new Set(keys).size !== keys.length) return null;
+  const records = names.map((name, sequence) => ({ id: `metadata-${sequence}`, name, urgency: "stable", sequence }));
+  const metadata = generateSuggestions(records, undefined, "en", { offset: rank - 1 })[0];
+  return metadata && Number.isInteger(metadata.minutes) && ["easy", "normal"].includes(metadata.difficulty)
+    ? { minutes: metadata.minutes, difficulty: metadata.difficulty }
+    : null;
+}
+
 export function loadIngredients(storage) {
   try { return parseStoredIngredients(storage?.getItem(STORAGE_KEY)); } catch { return []; }
 }
@@ -257,12 +276,14 @@ function boot() {
   const form = document.querySelector("#ingredient-form");
   const nameInput = document.querySelector("#ingredient-name");
   const expiryInput = document.querySelector("#ingredient-expiry");
+  const quickIngredients = document.querySelector("#quick-ingredients");
   const list = document.querySelector("#ingredient-list");
   const count = document.querySelector("#ingredient-count");
   const status = document.querySelector("#status-message");
   const suggestButton = document.querySelector("#suggest-button");
   const clearButton = document.querySelector("#clear-button");
   const suggestions = document.querySelector("#suggestions");
+  const alternativeMenusButton = document.querySelector("#alternative-menus-button");
   const favoritesList = document.querySelector("#favorites-list");
   const historyList = document.querySelector("#history-list");
   const useFirst = document.querySelector("#use-first-preview");
@@ -290,6 +311,7 @@ function boot() {
   let favorites = restored.favorites;
   let history = restored.history;
   let currentSuggestions = history.at(-1)?.suggestions ?? [];
+  let showingAlternativeMenus = false;
   const tabId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   let installPrompt;
   let dayRolloverTimer;
@@ -384,6 +406,25 @@ function boot() {
     (target && !target.disabled ? target : fallback)?.focus();
   }
 
+  function quickIngredientNames(key) {
+    return [translate("en", `quickIngredient${key}`), translate("ko", `quickIngredient${key}`)];
+  }
+
+  function renderQuickIngredients() {
+    quickIngredients.replaceChildren();
+    QUICK_INGREDIENT_KEYS.forEach((key) => {
+      const name = t(`quickIngredient${key}`);
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "quick-ingredient-chip";
+      chip.textContent = name;
+      const equivalentNames = new Set(quickIngredientNames(key).map((value) => value.toLocaleLowerCase("en-US")));
+      chip.disabled = ingredients.length >= MAX_INGREDIENTS || ingredients.some((item) => equivalentNames.has(item.name.toLocaleLowerCase("en-US")));
+      chip.addEventListener("click", () => addIngredient(name));
+      quickIngredients.append(chip);
+    });
+  }
+
   function mealCard(suggestion, favoriteEnabled = true) {
     const card = document.createElement("article");
     card.className = "meal-card";
@@ -393,6 +434,14 @@ function boot() {
     eyebrow.textContent = t("mealCardEyebrow", { anchor: suggestion.anchor });
     const heading = document.createElement("h3");
     heading.textContent = suggestion.title;
+    const metadata = recoverSuggestionMetadata(suggestion);
+    const badge = document.createElement("p");
+    badge.className = "meal-meta";
+    if (Number.isInteger(metadata?.minutes) && ["easy", "normal"].includes(metadata.difficulty)) {
+      badge.textContent = t("mealMeta", { minutes: metadata.minutes, difficulty: t(`difficulty.${metadata.difficulty}`) });
+    } else {
+      badge.hidden = true;
+    }
     const reason = document.createElement("p");
     reason.textContent = suggestion.useFirstReason;
     const order = document.createElement("p");
@@ -403,7 +452,7 @@ function boot() {
     const method = document.createElement("p");
     method.className = "method";
     method.textContent = suggestion.method;
-    content.append(eyebrow, heading, reason, order, method);
+    content.append(eyebrow, heading, badge, reason, order, method);
     if (favoriteEnabled) {
       const favorite = document.createElement("button");
       favorite.type = "button";
@@ -435,18 +484,25 @@ function boot() {
     return card;
   }
 
-  function renderSuggestions(items = []) {
+  function renderSuggestions(items = [], preserveCurrentSuggestions = false) {
     const usable = usableSuggestions(items, ingredients);
-    currentSuggestions = usable;
+    if (!preserveCurrentSuggestions) {
+      currentSuggestions = usable;
+      showingAlternativeMenus = false;
+    }
     suggestions.replaceChildren();
     if (!usable.length) {
+      alternativeMenusButton.hidden = true;
       const empty = document.createElement("p");
       empty.className = "empty-state";
       empty.textContent = t("suggestionsEmpty", { min: MIN_INGREDIENTS, max: MAX_INGREDIENTS });
       suggestions.append(empty);
       return;
     }
-    usable.forEach((item) => suggestions.append(mealCard(item)));
+    usable.forEach((item) => suggestions.append(mealCard(item, !preserveCurrentSuggestions)));
+    const alternatives = generateSuggestions(ingredients, undefined, locale, { offset: 3 });
+    alternativeMenusButton.hidden = alternatives.length !== SUGGESTIONS_LIMIT;
+    alternativeMenusButton.textContent = t(showingAlternativeMenus ? "firstMenus" : "otherMenus");
   }
 
   function renderFavorites() {
@@ -538,6 +594,7 @@ function boot() {
     nameInput.disabled = ingredients.length >= MAX_INGREDIENTS;
     expiryInput.disabled = ingredients.length >= MAX_INGREDIENTS;
     useFirst.textContent = ordered.map((item) => item.name).join(" → ") || t("useFirstEmpty");
+    renderQuickIngredients();
   }
 
   function refreshRenderedStatePreservingFocus() {
@@ -575,16 +632,15 @@ function boot() {
     if (event.target === nameInput || event.target === expiryInput) clearFormErrors([event.target]);
   });
 
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const name = normalizeName(nameInput.value);
+  async function addIngredient(rawName, expiryDate = "") {
+    const name = normalizeName(rawName);
     if (!name) {
       showFormError(t("errorNameRequired"), [nameInput]);
-      return;
+      return false;
     }
-    if (expiryInput.value && getExpiryStatus(expiryInput.value) === "expired") {
+    if (expiryDate && getExpiryStatus(expiryDate) === "expired") {
       showFormError(t("errorExpiredNotAdded"), [expiryInput]);
-      return;
+      return false;
     }
     if (ingredients.length >= MAX_INGREDIENTS || ingredients.some((item) => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) {
       if (ingredients.length >= MAX_INGREDIENTS) {
@@ -593,11 +649,11 @@ function boot() {
       } else {
         showFormError(t("errorDuplicate", { name }), [nameInput]);
       }
-      return;
+      return false;
     }
     clearFormErrors();
-    const ingredient = expiryInput.value
-      ? { id: `ingredient-${tabId}-${nextSequence}`, name, expiryDate: expiryInput.value, sequence: nextSequence++ }
+    const ingredient = expiryDate
+      ? { id: `ingredient-${tabId}-${nextSequence}`, name, expiryDate, sequence: nextSequence++ }
       : { id: `ingredient-${tabId}-${nextSequence}`, name, urgency: "stable", sequence: nextSequence++ };
     ingredients.push(ingredient);
     const result = await persist((state) => {
@@ -612,6 +668,12 @@ function boot() {
     form.reset();
     nameInput.focus();
     announce(persistenceMessage(result, t("ingredientAdded", { name }), t("ingredientAddedSessionOnly", { name }), t("ingredientAddedConflict", { name })), result.status === "saved" ? "success" : "warning");
+    return true;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await addIngredient(nameInput.value, expiryInput.value);
   });
 
   suggestButton.addEventListener("click", async () => {
@@ -622,6 +684,7 @@ function boot() {
     }
     const menuId = `menu-${tabId}-${nextMenuSequence++}`;
     const generated = bindSuggestionsToMenu(menuId, generateSuggestions(ingredients, undefined, locale));
+    showingAlternativeMenus = false;
     history.push({ id: menuId, createdAt: new Date().toISOString(), suggestions: generated });
     history = history.slice(-HISTORY_LIMIT);
     const result = await persist((state) => {
@@ -633,6 +696,18 @@ function boot() {
     renderHistory();
     announce(persistenceMessage(result, t("menuReady"), t("menuReadySessionOnly"), t("menuReadyConflict")), result.status === "saved" ? "success" : "warning");
     document.querySelector("#menu-heading").focus();
+  });
+
+  alternativeMenusButton.addEventListener("click", () => {
+    if (showingAlternativeMenus) {
+      showingAlternativeMenus = false;
+      renderSuggestions(currentSuggestions);
+    } else {
+      const alternatives = generateSuggestions(ingredients, undefined, locale, { offset: 3 });
+      if (alternatives.length !== SUGGESTIONS_LIMIT) return;
+      showingAlternativeMenus = true;
+      renderSuggestions(alternatives, true);
+    }
   });
 
   clearButton.addEventListener("click", async () => {

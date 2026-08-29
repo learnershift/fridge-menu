@@ -202,6 +202,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "fried-rice",
     order: 0,
+    minutes: 20,
+    difficulty: "easy",
     eligible: (profile) => Boolean(profile.rice),
     score: (profile) => 20 + (profile.egg ? 3 : 0) + (profile.kimchi ? 3 : 0) + (profile.proteins.length ? 3 : 0),
     text(profile, locale) {
@@ -225,6 +227,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "noodle-bowl",
     order: 1,
+    minutes: 15,
+    difficulty: "easy",
     eligible: (profile) => Boolean(profile.noodle),
     score: (profile) => 18 + (profile.egg ? 2 : 0) + (profile.vegetables.length ? 2 : 0),
     text(profile, locale) {
@@ -248,6 +252,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "stir-fry",
     order: 2,
+    minutes: 20,
+    difficulty: "normal",
     eligible: (profile) => profile.proteins.length > 0 && profile.vegetables.length > 0,
     score: () => 17,
     text(profile, locale) {
@@ -271,6 +277,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "rice-bowl",
     order: 3,
+    minutes: 25,
+    difficulty: "easy",
     eligible: (profile) => Boolean(profile.rice) && profile.proteins.length > 0,
     score: (profile) => 15 + (profile.vegetables.length ? 2 : 0),
     text(profile, locale) {
@@ -294,6 +302,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "omelet",
     order: 4,
+    minutes: 15,
+    difficulty: "easy",
     eligible: (profile) => Boolean(profile.egg) && profile.vegetables.length > 0,
     score: (profile) => 16 + (profile.dairy.length ? 2 : 0),
     text(profile, locale) {
@@ -317,6 +327,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "toast-plate",
     order: 5,
+    minutes: 10,
+    difficulty: "easy",
     eligible: (profile) => Boolean(profile.bread),
     score: (profile) => 14 + (profile.dairy.length ? 2 : 0),
     text(profile, locale) {
@@ -340,6 +352,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "fresh-salad",
     order: 6,
+    minutes: 10,
+    difficulty: "easy",
     eligible: (profile) => profile.vegetables.length >= 2,
     score: (profile) => 12 + (profile.dairy.length ? 2 : 0),
     text(profile, locale) {
@@ -362,6 +376,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "quick-soup",
     order: 7,
+    minutes: 30,
+    difficulty: "normal",
     eligible: () => true,
     score: (profile) => 9 + (profile.kimchi ? 9 : 0) + (profile.vegetables.length ? 1 : 0),
     text(profile, locale) {
@@ -384,6 +400,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "one-pan-skillet",
     order: 8,
+    minutes: 20,
+    difficulty: "easy",
     eligible: () => true,
     score: (profile) => 10 + (profile.proteins.length ? 2 : 0),
     text(profile, locale) {
@@ -406,6 +424,8 @@ const MEAL_TEMPLATES = Object.freeze([
   {
     id: "warm-bowl",
     order: 9,
+    minutes: 15,
+    difficulty: "easy",
     eligible: () => true,
     score: () => 8,
     text(profile, locale) {
@@ -427,26 +447,29 @@ const MEAL_TEMPLATES = Object.freeze([
   },
 ]);
 
-export function generateSuggestions(records, today = localToday(), locale = "en") {
+export function generateSuggestions(records, today = localToday(), locale = "en", options = {}) {
   const resolvedLocale = SUPPORTED_MEAL_LOCALES.includes(locale) ? locale : "en";
   const validation = validateIngredients(records, today);
   if (!validation.ok) return [];
   const ordered = sortUseFirst(records, today);
   const profile = buildProfile(ordered);
+  const offset = Number.isInteger(options?.offset) && options.offset > 0 ? options.offset : 0;
   const chosen = MEAL_TEMPLATES
     .filter((template) => template.eligible(profile))
     .map((template) => ({ template, score: template.score(profile) }))
     .sort((a, b) => b.score - a.score || a.template.order - b.template.order)
-    .slice(0, 3);
+    .slice(offset, offset + 3);
   return chosen.map(({ template }, index) => {
     const { title, method } = template.text(profile, resolvedLocale);
     return {
-      id: `suggestion-${index + 1}`,
+      id: `suggestion-${offset + index + 1}`,
       title,
       anchor: profile.anchor.name,
       ingredients: profile.names,
       useFirstReason: useFirstReason(resolvedLocale, profile.anchor),
       method,
+      minutes: template.minutes,
+      difficulty: template.difficulty,
     };
   });
 }
