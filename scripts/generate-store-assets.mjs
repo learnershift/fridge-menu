@@ -71,16 +71,16 @@ const header = Buffer.alloc(13); header.writeUInt32BE(width, 0); header.writeUIn
 await mkdir(resolve(root, "release/store-assets"), { recursive: true });
 await writeFile(output, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(raw, { level: 9 })), chunk("IEND", Buffer.alloc(0))]));
 
-function encodeRgbPng(imageWidth, imageHeight, imagePixels) {
-  const imageRaw = Buffer.alloc((imageWidth * 3 + 1) * imageHeight);
+function encodePng(imageWidth, imageHeight, imagePixels, channels, colorType) {
+  const imageRaw = Buffer.alloc((imageWidth * channels + 1) * imageHeight);
   for (let y = 0; y < imageHeight; y += 1) {
-    imagePixels.copy(imageRaw, y * (imageWidth * 3 + 1) + 1, y * imageWidth * 3, (y + 1) * imageWidth * 3);
+    imagePixels.copy(imageRaw, y * (imageWidth * channels + 1) + 1, y * imageWidth * channels, (y + 1) * imageWidth * channels);
   }
   const imageHeader = Buffer.alloc(13);
   imageHeader.writeUInt32BE(imageWidth, 0);
   imageHeader.writeUInt32BE(imageHeight, 4);
   imageHeader[8] = 8;
-  imageHeader[9] = 2;
+  imageHeader[9] = colorType;
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     chunk("IHDR", imageHeader),
@@ -89,7 +89,22 @@ function encodeRgbPng(imageWidth, imageHeight, imagePixels) {
   ]);
 }
 
-function generateRuntimeIcon(size) {
+function encodeRgbPng(imageWidth, imageHeight, imagePixels) {
+  return encodePng(imageWidth, imageHeight, imagePixels, 3, 2);
+}
+
+function encodeRgbaPng(imageWidth, imageHeight, rgbPixels) {
+  const rgbaPixels = Buffer.alloc(imageWidth * imageHeight * 4);
+  for (let source = 0, target = 0; source < rgbPixels.length; source += 3, target += 4) {
+    rgbaPixels[target] = rgbPixels[source];
+    rgbaPixels[target + 1] = rgbPixels[source + 1];
+    rgbaPixels[target + 2] = rgbPixels[source + 2];
+    rgbaPixels[target + 3] = 255;
+  }
+  return encodePng(imageWidth, imageHeight, rgbaPixels, 4, 6);
+}
+
+function generateIconPixels(size) {
   const image = Buffer.alloc(size * size * 3);
   const put = (x, y, color) => {
     if (x < 0 || y < 0 || x >= size || y >= size) return;
@@ -110,9 +125,9 @@ function generateRuntimeIcon(size) {
   drawEllipse(size * 0.5, size * 0.61, size * 0.31, size * 0.2, palette.cream);
   drawEllipse(size * 0.47, size * 0.39, size * 0.23, size * 0.13, palette.leaf);
   drawEllipse(size * 0.57, size * 0.33, size * 0.12, size * 0.065, palette.lime);
-  return encodeRgbPng(size, size, image);
+  return image;
 }
 
-for (const size of [192, 512]) await writeFile(resolve(root, `icon-${size}.png`), generateRuntimeIcon(size));
-await writeFile(storeIconOutput, generateRuntimeIcon(512));
+for (const size of [192, 512]) await writeFile(resolve(root, `icon-${size}.png`), encodeRgbPng(size, size, generateIconPixels(size)));
+await writeFile(storeIconOutput, encodeRgbaPng(512, 512, generateIconPixels(512)));
 console.log(`STORE_ASSET_OK feature=${output} icon=${storeIconOutput}`);

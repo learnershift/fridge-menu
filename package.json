@@ -11,9 +11,10 @@
     "ci:receipt": "node scripts/ci-release-receipt.mjs",
     "release:manifest": "node scripts/release-manifest.mjs",
     "test": "node --test tests/*.test.js",
+    "test:browser": "node scripts/capture-store-assets.mjs --verify-dom-only",
     "store-assets": "node scripts/generate-store-assets.mjs",
     "verify:aab-repro": "node scripts/verify-aab-repro.mjs",
-    "verify:release": "npm test && npm run build && npm run store-assets && npm run verify:aab-repro && node scripts/release-manifest.mjs && npm run android:evidence",
+    "verify:release": "npm test && npm run build && npm run test:browser && npm run store-assets && npm run verify:aab-repro && node scripts/release-manifest.mjs && npm run android:evidence",
     "start": "node scripts/serve.mjs",
     "store-screenshot": "node scripts/capture-store-assets.mjs"
   }

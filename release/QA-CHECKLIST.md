@@ -12,6 +12,9 @@ For every manual item, fill in: `Tester:`, `Device model:`, `Android version:`, 
 - [ ] Confirm the artifact is `android/app/build/outputs/bundle/release/app-release.aab` and the application ID is `com.learnershift.fridgemenu`.
 - [ ] Build twice from the same clean revision and confirm identical SHA-256 digests.
 - [ ] Confirm no signing key, production ad identifier, analytics, tracker, remote API, or Android network permission is present.
+- [ ] Run `npm run test:browser` against the fresh `dist` output and retain both English and Korean `STORE_UX_INTERACTION_OK` results.
+- [ ] Confirm the Play upload icon is a 32-bit RGBA 512×512 PNG while PWA icons and the feature graphic retain their intended formats.
+- [ ] Treat a CI receipt as current only when execution is `GITHUB_ACTIONS`, the run URL is non-null, and its Git SHA and AAB SHA-256 match this exact candidate. CI verification is evidence, not approval authority.
 - [ ] Before Play upload, provide owner-controlled signing variables, rebuild, require `AAB_SIGNED_OK`, and record the signed AAB digest.
 
 ## 2. Physical device QA (owner/device required)
@@ -44,17 +47,19 @@ For every manual item, fill in: `Tester:`, `Device model:`, `Android version:`, 
 - [ ] Confirm all four final 1080×1920 Android phone screenshots match the exact signed candidate and contain no personal data or unfinished advertising UI.
 - [ ] Verify screenshots, icon, feature graphic, listing, privacy policy, data-safety answers, and release notes describe the same candidate.
 - [ ] Supply the final public privacy-policy URL and support contact in Play Console.
+- [ ] Record `Health form access date:`, `final Health answer:`, owner, current Console wording, and evidence ID. A blank value or HOLD blocks closed, open, and production release.
 
 ## 6. Owner approval boundary
 
 Do not sign, upload, submit, publish, or launch without fresh owner approval naming the exact action and target. Local QA completion and review PASS do not grant that approval.
 
 - [ ] Owner confirms the exact candidate digest and target Play track.
+- [ ] Record a separate policy hosting/publication approval receipt for the exact HTTPS target and Git SHA.
 - [ ] Record a signing approval receipt for the exact Git SHA and AAB SHA-256.
-- [ ] Record a separate internal-test upload approval receipt for the exact target track.
-- [ ] Record a separate production submission approval receipt, including country availability.
-- [ ] Record a separate publication approval receipt for the exact visibility and rollout target.
-- [ ] Every receipt records action, target track, Git SHA, AAB SHA-256, approver, timestamp, and authority evidence ID.
+- [ ] Record a separate internal-test upload approval receipt for the exact target track, citing the policy and signing predecessor receipt IDs.
+- [ ] Record a separate production submission approval receipt, including country availability and the internal-QA predecessor receipt ID.
+- [ ] Record a separate app publication approval receipt for the exact visibility and rollout target, citing the production-submission receipt ID.
+- [ ] Every receipt records action, exact target, Git SHA, AAB SHA-256 when applicable, approver, timestamp, and authority evidence ID.
 
 ## 7. Future AdMob disclosure coupling
 

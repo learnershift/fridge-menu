@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
+import { inflateSync } from "node:zlib";
 import { runtimeShellVersion } from "../scripts/runtime-shell.mjs";
 import { generateSuggestions } from "../meal-engine.js";
 
@@ -29,6 +30,33 @@ import {
 
 const root = resolve(import.meta.dirname, "..");
 const read = (name) => readFile(resolve(root, name), "utf8");
+
+function decodeUnfilteredPng(buffer) {
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  const bitDepth = buffer[24];
+  const colorType = buffer[25];
+  const channels = colorType === 2 ? 3 : colorType === 6 ? 4 : 0;
+  assert.equal(bitDepth, 8, "generated PNGs must use 8-bit channels");
+  assert.ok(channels, `unsupported generated PNG color type: ${colorType}`);
+
+  const idat = [];
+  for (let offset = 8; offset < buffer.length;) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString("ascii", offset + 4, offset + 8);
+    if (type === "IDAT") idat.push(buffer.subarray(offset + 8, offset + 8 + length));
+    offset += length + 12;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const pixels = Buffer.alloc(width * height * channels);
+  for (let row = 0; row < height; row += 1) {
+    const source = row * (stride + 1);
+    assert.equal(raw[source], 0, "generated PNG scanlines must use the deterministic no-filter mode");
+    raw.copy(pixels, row * stride, source + 1, source + 1 + stride);
+  }
+  return { width, height, colorType, pixels };
+}
 
 test("versioned local persistence round-trips and malformed data fails closed", () => {
   const records = [{ id: "one", name: "Kale", urgency: "use-now", sequence: 0 }];
@@ -310,7 +338,9 @@ test("privacy policy is available in-app and contains the finalized owner identi
 });
 
 test("owner handoff covers current Play gates, questionnaire answers, and future ad disclosure coupling", async () => {
-  const [handoff, qa] = await Promise.all([read("release/OWNER-HANDOFF.md"), read("release/QA-CHECKLIST.md")]);
+  const [handoff, qa, dataSafety] = await Promise.all([
+    read("release/OWNER-HANDOFF.md"), read("release/QA-CHECKLIST.md"), read("release/data-safety.md"),
+  ]);
   for (const required of [
     "organization account", "D-U-N-S", "production track",
     "developer identity", "device verification", "OTP", "Health apps declaration",
@@ -319,7 +349,14 @@ test("owner handoff covers current Play gates, questionnaire answers, and future
   ]) assert.match(handoff, new RegExp(required, "i"), `handoff missing ${required}`);
   assert.doesNotMatch(handoff, /Upload the unsigned AAB/i);
   assert.doesNotMatch(handoff, /12 testers|14 consecutive days|13 November 2023/i);
-  assert.match(handoff, /Health apps declaration \| No — the app does not provide health functionality/i);
+  assert.doesNotMatch(handoff, /Health apps declaration \| No — the app does not provide health functionality/i);
+  assert.match(handoff, /Health apps declaration \| HOLD — owner resolution required/i);
+  assert.match(handoff, /planning meals/i);
+  assert.match(handoff, /Nutrition and Weight Management/i);
+  assert.match(handoff, /Do not save the Health form or proceed to closed, open, or production release until this HOLD is resolved/i);
+  assert.match(dataSafety, /Do not use this draft to answer the Health apps declaration/i);
+  assert.match(qa, /Health form access date/i);
+  assert.match(qa, /final Health answer/i);
   for (const coupledUpdate of ["Ads declaration", "Data safety", "Advertising ID", "privacy-policy", "play-listing"]) {
     assert.match(qa, new RegExp(coupledUpdate, "i"), `QA missing future AdMob update: ${coupledUpdate}`);
   }
@@ -561,14 +598,19 @@ test("package has no dependency or install surface", async () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
-  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "ci:receipt", "release:manifest", "start", "store-assets", "store-screenshot", "test", "verify:aab-repro", "verify:release"]);
+  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "ci:receipt", "release:manifest", "start", "store-assets", "store-screenshot", "test", "test:browser", "verify:aab-repro", "verify:release"]);
 });
 
 test("verify:release builds the AAB before manifest and Android evidence", async () => {
   const pkg = JSON.parse(await read("package.json"));
   const steps = pkg.scripts["verify:release"].split(" && ");
+  const build = steps.indexOf("npm run build");
+  const browser = steps.indexOf("npm run test:browser");
   const aab = steps.indexOf("npm run verify:aab-repro");
 
+  assert.notEqual(browser, -1, "verify:release must execute real local browser interactions");
+  assert.ok(build < browser, "browser interactions must run against a fresh dist build");
+  assert.ok(browser < aab, "browser interactions must pass before Android packaging");
   assert.notEqual(aab, -1, "verify:release must produce the AAB");
   assert.ok(aab < steps.indexOf("node scripts/release-manifest.mjs"));
   assert.ok(aab < steps.indexOf("npm run android:evidence"));
@@ -641,6 +683,7 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.equal(pkg.scripts["release:manifest"], "node scripts/release-manifest.mjs");
   assert.equal(pkg.scripts["store-assets"], "node scripts/generate-store-assets.mjs");
   assert.equal(pkg.scripts["store-screenshot"], "node scripts/capture-store-assets.mjs");
+  assert.equal(pkg.scripts["test:browser"], "node scripts/capture-store-assets.mjs --verify-dom-only");
   assert.ok(pkg.scripts["verify:release"].includes("npm test"));
   assert.ok(pkg.scripts["verify:release"].includes("npm run build"));
   assert.match(androidBuild, /compileSdk\s*=\s*36/);
@@ -680,6 +723,12 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(capture, /2026-08-25T08:00:00\.000Z/);
   assert.match(capture, /ingredient-expiry[^\n]*2099-01-02/);
   assert.match(capture, /FRIDGE_MENU_CHROME_BIN/);
+  assert.match(capture, /--verify-dom-only/);
+  assert.doesNotMatch(capture, /verifyDomOnly && !process\.env\.FRIDGE_MENU_CAPTURE_URL/);
+  assert.match(capture, /STORE_UX_INTERACTION_OK/);
+  assert.match(capture, /exceptionDetails/);
+  assert.match(capture, /quick-ingredient-chip/);
+  assert.match(capture, /alternative-menus-button/);
   for (const name of ["01-empty-home", "02-use-first-list", "03-menu-results", "04-favorites-history"]) {
     assert.match(capture, new RegExp(name));
   }
@@ -691,6 +740,7 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(verificationMetadata, /<sha256 value="[0-9a-f]{64}"/);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run build/);
+  assert.match(workflow, /npm run test:browser/);
   assert.match(workflow, /npm run verify:release/);
   assert.match(workflow, /npm run ci:receipt/);
   assert.match(workflow, /FRIDGE_MENU_REQUIRE_UNSIGNED:\s*["']?1/);
@@ -719,13 +769,29 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
 test("owner handoff is fail-closed for unresolved declarations, approvals, testing, and first-release recovery", async () => {
   const [handoff, qa] = await Promise.all([read("release/OWNER-HANDOFF.md"), read("release/QA-CHECKLIST.md")]);
   for (const required of [
-    "No — the app does not provide health functionality", "Play App Signing", "upload key", "zero OWNER_REQUIRED markers",
+    "HOLD — owner resolution required", "Play App Signing", "upload key", "zero OWNER_REQUIRED markers",
     "tester list", "opt-in URL", "matching Google account", "delivered version", "country availability",
     "target track", "Git SHA", "AAB SHA-256", "approver", "timestamp", "authority evidence ID",
   ]) assert.match(handoff, new RegExp(required, "i"), `handoff missing fail-closed field: ${required}`);
-  for (const separateApproval of ["signing", "internal-test upload", "production submission", "publication"]) {
+  for (const separateApproval of ["policy hosting/publication", "signing", "internal-test upload", "production submission", "app publication"]) {
     assert.match(handoff, new RegExp(separateApproval, "i"), `handoff missing separate approval: ${separateApproval}`);
   }
+  const sequence = handoff.slice(handoff.indexOf("## Submission sequence"), handoff.indexOf("## Separate approval receipts"));
+  const orderedGates = [
+    "Policy hosting/publication approval", "Signing approval", "Internal-test upload approval",
+    "Health declaration resolution", "Production submission approval", "App publication approval",
+  ];
+  let priorIndex = -1;
+  for (const gate of orderedGates) {
+    const gateIndex = sequence.indexOf(gate);
+    assert.ok(gateIndex > priorIndex, `submission gate must appear in order: ${gate}`);
+    priorIndex = gateIndex;
+  }
+  assert.match(handoff, /LOCAL_SIMULATION_ONLY[^.]*not current CI evidence/i);
+  assert.match(handoff, /run URL[^.]*Git SHA[^.]*AAB SHA-256[^.]*exact candidate/i);
+  assert.match(qa, /internal-test upload approval[^.]*policy and signing predecessor receipt IDs/i);
+  assert.doesNotMatch(qa, /internal-test upload approval[^.]*Health-resolution predecessor receipt IDs/i);
+  assert.match(qa, /AAB SHA-256 when applicable/i);
   assert.match(qa, /LOCAL_CHROME_SIMULATION/);
   assert.match(qa, /withdraw[^.]*before publication/i);
   assert.match(qa, /fix-forward[^.]*higher versionCode/i);
@@ -786,9 +852,20 @@ test("Play upload icon is a 512px PNG derived from the canonical app artwork", a
     readFile(resolve(root, "icon-512.png")),
   ]);
   assert.deepEqual([...icon.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-  assert.equal(icon.readUInt32BE(16), 512);
-  assert.equal(icon.readUInt32BE(20), 512);
-  assert.deepEqual(icon, runtimeIcon);
+  const store = decodeUnfilteredPng(icon);
+  const runtime = decodeUnfilteredPng(runtimeIcon);
+  assert.equal(store.width, 512);
+  assert.equal(store.height, 512);
+  assert.equal(store.colorType, 6, "Play icon must be a 32-bit RGBA PNG");
+  assert.equal(runtime.colorType, 2, "PWA icon must remain truecolor RGB");
+  const storeRgb = Buffer.alloc(runtime.pixels.length);
+  for (let source = 0, target = 0; source < store.pixels.length; source += 4, target += 3) {
+    storeRgb[target] = store.pixels[source];
+    storeRgb[target + 1] = store.pixels[source + 1];
+    storeRgb[target + 2] = store.pixels[source + 2];
+    assert.equal(store.pixels[source + 3], 255, "Play icon alpha must be fully opaque");
+  }
+  assert.deepEqual(storeRgb, runtime.pixels, "Play and PWA icons must use the same canonical RGB artwork");
 });
 
 test("PWA provides deterministic bitmap install icons", async () => {
