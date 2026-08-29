@@ -23,6 +23,21 @@ const seededState = {
   ],
   favorites: [], history: [],
 };
+const seededStateKo = {
+  version: 2,
+  ingredients: [
+    { id: "spinach", name: "시금치", expiryDate: "2099-01-02", sequence: 0 },
+    { id: "mushrooms", name: "버섯", expiryDate: "2099-01-03", sequence: 1 },
+    { id: "eggs", name: "계란", expiryDate: "2099-01-05", sequence: 2 },
+    { id: "rice", name: "밥", expiryDate: "2099-02-01", sequence: 3 },
+    { id: "tomatoes", name: "토마토", expiryDate: "2099-01-04", sequence: 4 },
+  ],
+  favorites: [], history: [],
+};
+const localePasses = [
+  { locale: "en", browserLocale: "en-US", filePrefix: "", state: seededState },
+  { locale: "ko", browserLocale: "ko-KR", filePrefix: "ko-", state: seededStateKo },
+];
 const candidates = [
   process.env.FRIDGE_MENU_CHROME_BIN,
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -110,21 +125,25 @@ try {
   await protocol.call("Page.navigate", { url });
   await loaded;
 
-  for (let index = 0; index < captures.length; index += 1) {
-    const storage = index === 0 ? null : JSON.stringify(seededState);
-    loaded = protocol.event("Page.loadEventFired");
-    await protocol.call("Runtime.evaluate", { expression: storage === null
-      ? 'localStorage.removeItem("fridge-menu:v1"); location.reload()'
-      : `localStorage.setItem("fridge-menu:v1", ${JSON.stringify(storage)}); location.reload()` });
-    await loaded;
-    await protocol.call("Runtime.evaluate", { expression: captures[index].action, awaitPromise: true });
-    await protocol.call("Runtime.evaluate", { expression: "document.fonts.ready", awaitPromise: true });
-    await protocol.call("Runtime.evaluate", { expression: "new Promise(resolve => setTimeout(resolve, 300))", awaitPromise: true });
-    const screenshot = await protocol.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
-    const output = resolve(outputDir, `fridge-menu-${captures[index].name}-1080x1920.png`);
-    await writeFile(output, Buffer.from(screenshot.data, "base64"));
-    await access(output);
-    console.log(`STORE_CAPTURE_OK path=${output}`);
+  for (const pass of localePasses) {
+    await protocol.call("Emulation.setLocaleOverride", { locale: pass.browserLocale });
+    for (let index = 0; index < captures.length; index += 1) {
+      const storage = index === 0 ? null : JSON.stringify(pass.state);
+      const localeSeed = `localStorage.setItem("fridge-menu:locale:v1", ${JSON.stringify(pass.locale)});`;
+      loaded = protocol.event("Page.loadEventFired");
+      await protocol.call("Runtime.evaluate", { expression: storage === null
+        ? `localStorage.removeItem("fridge-menu:v1"); ${localeSeed} location.reload()`
+        : `localStorage.setItem("fridge-menu:v1", ${JSON.stringify(storage)}); ${localeSeed} location.reload()` });
+      await loaded;
+      await protocol.call("Runtime.evaluate", { expression: captures[index].action, awaitPromise: true });
+      await protocol.call("Runtime.evaluate", { expression: "document.fonts.ready", awaitPromise: true });
+      await protocol.call("Runtime.evaluate", { expression: "new Promise(resolve => setTimeout(resolve, 300))", awaitPromise: true });
+      const screenshot = await protocol.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
+      const output = resolve(outputDir, `fridge-menu-${pass.filePrefix}${captures[index].name}-1080x1920.png`);
+      await writeFile(output, Buffer.from(screenshot.data, "base64"));
+      await access(output);
+      console.log(`STORE_CAPTURE_OK path=${output}`);
+    }
   }
 } finally {
   if (socket) socket.close();

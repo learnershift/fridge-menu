@@ -7,6 +7,13 @@ import {
   sortUseFirst,
   validateIngredients,
 } from "./meal-engine.js";
+import {
+  applyStaticTranslations,
+  detectLocale,
+  readStoredLocale,
+  saveStoredLocale,
+  translate,
+} from "./i18n.js";
 
 export const STORAGE_KEY = "fridge-menu:v1";
 export const STORAGE_VERSION = 1;
@@ -260,9 +267,14 @@ function boot() {
   const historyList = document.querySelector("#history-list");
   const useFirst = document.querySelector("#use-first-preview");
   const installButton = document.querySelector("#install-button");
+  const langToggle = document.querySelector("#lang-toggle");
 
   let storageReadBlocked = false;
   const storage = accessStorage(window, () => { storageReadBlocked = true; });
+  let locale = readStoredLocale(storage)
+    ?? detectLocale([...(navigator.languages ?? []), navigator.language]);
+  const t = (key, params) => translate(locale, key, params);
+  applyStaticTranslations(document, locale);
   let lastKnownRaw = null;
   const restored = (() => {
     if (!storage) return emptyState();
@@ -378,7 +390,7 @@ function boot() {
     const content = document.createElement("div");
     const eyebrow = document.createElement("p");
     eyebrow.className = "eyebrow";
-    eyebrow.textContent = `Use ${suggestion.anchor} first`;
+    eyebrow.textContent = t("mealCardEyebrow", { anchor: suggestion.anchor });
     const heading = document.createElement("h3");
     heading.textContent = suggestion.title;
     const reason = document.createElement("p");
@@ -386,7 +398,7 @@ function boot() {
     const order = document.createElement("p");
     order.className = "ingredient-line";
     const orderLabel = document.createElement("strong");
-    orderLabel.textContent = "Available ingredients:";
+    orderLabel.textContent = t("availableIngredients");
     order.append(orderLabel, ` ${suggestion.ingredients.join(" → ")}`);
     const method = document.createElement("p");
     method.className = "method";
@@ -398,9 +410,9 @@ function boot() {
       favorite.className = "button button--quiet favorite-button";
       const active = favorites.includes(suggestion.id);
       favorite.dataset.suggestionId = suggestion.id;
-      favorite.textContent = active ? "Remove favorite" : "Favorite";
+      favorite.textContent = active ? t("removeFavorite") : t("favorite");
       favorite.setAttribute("aria-pressed", String(active));
-      favorite.setAttribute("aria-label", `${active ? "Remove" : "Add"} ${suggestion.title} ${active ? "from" : "to"} favorites`);
+      favorite.setAttribute("aria-label", t(active ? "favoriteRemoveAria" : "favoriteAddAria", { title: suggestion.title }));
       favorite.addEventListener("click", async () => {
         favorites = active ? favorites.filter((id) => id !== suggestion.id) : [...favorites, suggestion.id];
         const result = await persist((state) => ({
@@ -412,9 +424,9 @@ function boot() {
         focusFavoriteButton(suggestion.id);
         announce(persistenceMessage(
           result,
-          active ? "Favorite removed." : "Meal idea favorited.",
-          `${active ? "Favorite removed" : "Meal idea favorited"} for this session only; safe multi-tab saving is unavailable.`,
-          "Favorite change was not applied because another tab changed the saved data. Try again.",
+          t(active ? "favoriteRemoved" : "favorited"),
+          t(active ? "favoriteRemovedSessionOnly" : "favoritedSessionOnly"),
+          t("favoriteConflict"),
         ), result.status === "saved" ? "success" : "warning");
       });
       content.append(favorite);
@@ -430,7 +442,7 @@ function boot() {
     if (!usable.length) {
       const empty = document.createElement("p");
       empty.className = "empty-state";
-      empty.textContent = `Add ${MIN_INGREDIENTS}–${MAX_INGREDIENTS} ingredients, then make a menu.`;
+      empty.textContent = t("suggestionsEmpty", { min: MIN_INGREDIENTS, max: MAX_INGREDIENTS });
       suggestions.append(empty);
       return;
     }
@@ -445,7 +457,7 @@ function boot() {
     if (!unique.length) {
       const empty = document.createElement("p");
       empty.className = "empty-state";
-      empty.textContent = "Favorite a meal idea to keep it here.";
+      empty.textContent = t("favoritesEmpty");
       favoritesList.append(empty);
       return;
     }
@@ -457,7 +469,7 @@ function boot() {
     if (!history.length) {
       const empty = document.createElement("p");
       empty.className = "empty-state";
-      empty.textContent = "Your recent generated menus will appear here.";
+      empty.textContent = t("historyEmpty");
       historyList.append(empty);
       return;
     }
@@ -468,9 +480,10 @@ function boot() {
       button.className = "history-button";
       button.dataset.historyId = entry.id;
       button.disabled = usable.length === 0;
+      const createdAt = new Date(entry.createdAt).toLocaleString(locale === "ko" ? "ko-KR" : "en-US");
       button.textContent = usable.length
-        ? `${new Date(entry.createdAt).toLocaleString()} · ${usable.map((item) => item.title).join(", ")}`
-        : `${new Date(entry.createdAt).toLocaleString()} · unavailable because ingredients changed or expired`;
+        ? `${createdAt} · ${usable.map((item) => item.title).join(", ")}`
+        : `${createdAt} · ${t("historyUnavailable")}`;
       button.addEventListener("click", () => {
         renderSuggestions(usable);
         document.querySelector("#menu-heading").focus();
@@ -494,14 +507,15 @@ function boot() {
       ingredientName.textContent = item.name;
       const expiry = document.createElement("span");
       expiry.className = "urgency-label";
+      const urgencyKeys = { "use-now": "urgencyUseNow", "use-soon": "urgencyUseSoon", stable: "urgencyStable", expired: "urgencyExpired" };
       expiry.textContent = item.expiryDate
-        ? `${item.urgency.replace("-", " ")} · ${item.expiryDate}`
-        : `${item.urgency.replace("-", " ")} · legacy priority`;
+        ? `${t(urgencyKeys[item.urgency] ?? "urgencyStable")} · ${item.expiryDate}`
+        : t("noDateLabel");
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "remove-button";
-      remove.textContent = "Remove";
-      remove.setAttribute("aria-label", `Remove ${item.name}`);
+      remove.textContent = t("removeIngredient");
+      remove.setAttribute("aria-label", t("removeIngredientAria", { name: item.name }));
       remove.addEventListener("click", async () => {
         const position = ordered.findIndex((candidate) => candidate.id === item.id);
         const focusId = ordered[position + 1]?.id ?? ordered[position - 1]?.id;
@@ -512,18 +526,18 @@ function boot() {
         renderFavorites();
         renderHistory();
         focusIngredientAfterRemoval(focusId);
-        announce(persistenceMessage(result, `${item.name} removed.`, `${item.name} removed for this session only; safe multi-tab saving is unavailable.`, `${item.name} was not removed because another tab changed the saved data. Try again.`), result.status === "saved" ? "neutral" : "warning");
+        announce(persistenceMessage(result, t("ingredientRemoved", { name: item.name }), t("ingredientRemovedSessionOnly", { name: item.name }), t("ingredientRemovedConflict", { name: item.name })), result.status === "saved" ? "neutral" : "warning");
       });
       row.append(dot, ingredientName, expiry, remove);
       list.append(row);
     }
     count.textContent = `${ingredients.length} / ${MAX_INGREDIENTS}`;
-    count.setAttribute("aria-label", `Ingredient count: ${ingredients.length} of ${MAX_INGREDIENTS}`);
+    count.setAttribute("aria-label", t("ingredientCountLabel", { count: ingredients.length, max: MAX_INGREDIENTS }));
     suggestButton.disabled = ingredients.length < MIN_INGREDIENTS;
     clearButton.disabled = ingredients.length === 0;
     nameInput.disabled = ingredients.length >= MAX_INGREDIENTS;
     expiryInput.disabled = ingredients.length >= MAX_INGREDIENTS;
-    useFirst.textContent = ordered.map((item) => item.name).join(" → ") || "Your use-first order will appear here.";
+    useFirst.textContent = ordered.map((item) => item.name).join(" → ") || t("useFirstEmpty");
   }
 
   function refreshRenderedStatePreservingFocus() {
@@ -552,7 +566,7 @@ function boot() {
     window.clearTimeout(dayRolloverTimer);
     dayRolloverTimer = window.setTimeout(() => {
       refreshRenderedStatePreservingFocus();
-      announce("Freshness updated for a new day.");
+      announce(t("dayRollover"));
       scheduleDayRollover();
     }, millisecondsUntilNextLocalDay());
   }
@@ -564,26 +578,27 @@ function boot() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const name = normalizeName(nameInput.value);
-    if (!name || !expiryInput.value) {
-      const invalidFields = [!name && nameInput, !expiryInput.value && expiryInput].filter(Boolean);
-      showFormError("Enter an ingredient and expiry date.", invalidFields);
+    if (!name) {
+      showFormError(t("errorNameRequired"), [nameInput]);
       return;
     }
-    if (getExpiryStatus(expiryInput.value) === "expired") {
-      showFormError("Remove expired ingredients before adding new ones.", [expiryInput]);
+    if (expiryInput.value && getExpiryStatus(expiryInput.value) === "expired") {
+      showFormError(t("errorExpiredNotAdded"), [expiryInput]);
       return;
     }
     if (ingredients.length >= MAX_INGREDIENTS || ingredients.some((item) => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) {
       if (ingredients.length >= MAX_INGREDIENTS) {
-        showFormError("Your fridge list is full.", []);
+        showFormError(t("errorListFull"), []);
         clearButton.focus();
       } else {
-        showFormError(`“${name}” is already in your fridge.`, [nameInput]);
+        showFormError(t("errorDuplicate", { name }), [nameInput]);
       }
       return;
     }
     clearFormErrors();
-    const ingredient = { id: `ingredient-${tabId}-${nextSequence}`, name, expiryDate: expiryInput.value, sequence: nextSequence++ };
+    const ingredient = expiryInput.value
+      ? { id: `ingredient-${tabId}-${nextSequence}`, name, expiryDate: expiryInput.value, sequence: nextSequence++ }
+      : { id: `ingredient-${tabId}-${nextSequence}`, name, urgency: "stable", sequence: nextSequence++ };
     ingredients.push(ingredient);
     const result = await persist((state) => {
       if (state.ingredients.length >= MAX_INGREDIENTS || state.ingredients.some((item) => item.name.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))) return null;
@@ -596,24 +611,27 @@ function boot() {
     renderHistory();
     form.reset();
     nameInput.focus();
-    announce(persistenceMessage(result, `${name} added.`, `${name} added for this session only; safe multi-tab saving is unavailable.`, `${name} was not added because another tab changed the saved data. Check the list and try again.`), result.status === "saved" ? "success" : "warning");
+    announce(persistenceMessage(result, t("ingredientAdded", { name }), t("ingredientAddedSessionOnly", { name }), t("ingredientAddedConflict", { name })), result.status === "saved" ? "success" : "warning");
   });
 
   suggestButton.addEventListener("click", async () => {
     const validation = validateIngredients(ingredients);
-    if (!validation.ok) { announce(validation.message, "error"); return; }
+    if (!validation.ok) {
+      announce(t(`validation.${validation.code}`, { ...validation.params, min: MIN_INGREDIENTS, max: MAX_INGREDIENTS }), "error");
+      return;
+    }
     const menuId = `menu-${tabId}-${nextMenuSequence++}`;
-    const generated = bindSuggestionsToMenu(menuId, generateSuggestions(ingredients));
+    const generated = bindSuggestionsToMenu(menuId, generateSuggestions(ingredients, undefined, locale));
     history.push({ id: menuId, createdAt: new Date().toISOString(), suggestions: generated });
     history = history.slice(-HISTORY_LIMIT);
     const result = await persist((state) => {
       if (!validateIngredients(state.ingredients).ok) return null;
-      const latestSuggestions = bindSuggestionsToMenu(menuId, generateSuggestions(state.ingredients));
+      const latestSuggestions = bindSuggestionsToMenu(menuId, generateSuggestions(state.ingredients, undefined, locale));
       return { ...state, history: [...state.history, { id: menuId, createdAt: new Date().toISOString(), suggestions: latestSuggestions }].slice(-HISTORY_LIMIT) };
     });
     renderSuggestions(result.status === "blocked" ? generated : currentSuggestions);
     renderHistory();
-    announce(persistenceMessage(result, "Three offline use-first ideas are ready.", "Three ideas are ready for this session only; safe multi-tab saving is unavailable.", "A menu was not created because another tab changed the saved ingredients. Check the list and try again."), result.status === "saved" ? "success" : "warning");
+    announce(persistenceMessage(result, t("menuReady"), t("menuReadySessionOnly"), t("menuReadyConflict")), result.status === "saved" ? "success" : "warning");
     document.querySelector("#menu-heading").focus();
   });
 
@@ -625,8 +643,16 @@ function boot() {
     renderSuggestions();
     renderFavorites();
     renderHistory();
-    announce(persistenceMessage(result, "Fridge list cleared.", "Fridge list cleared for this session only; safe multi-tab saving is unavailable.", "The list was not cleared because another tab changed the saved data. Try again."), result.status === "saved" ? "neutral" : "warning");
+    announce(persistenceMessage(result, t("listCleared"), t("listClearedSessionOnly"), t("listClearedConflict")), result.status === "saved" ? "neutral" : "warning");
     nameInput.focus();
+  });
+
+  langToggle.addEventListener("click", () => {
+    locale = locale === "ko" ? "en" : "ko";
+    saveStoredLocale(storage, locale);
+    applyStaticTranslations(document, locale);
+    refreshRenderedStatePreservingFocus();
+    announce(t("langChanged"));
   });
 
   window.addEventListener("beforeinstallprompt", (event) => {
@@ -639,30 +665,30 @@ function boot() {
     try {
       await installPrompt.prompt();
       const choice = await installPrompt.userChoice;
-      announce(choice?.outcome === "accepted" ? "Installation accepted." : "Installation dismissed.", choice?.outcome === "accepted" ? "success" : "neutral");
+      announce(t(choice?.outcome === "accepted" ? "installAccepted" : "installDismissed"), choice?.outcome === "accepted" ? "success" : "neutral");
     } catch {
-      announce("Installation could not be started.", "warning");
+      announce(t("installFailed"), "warning");
     } finally {
       installPrompt = undefined;
       installButton.hidden = true;
       document.querySelector(".brand").focus();
     }
   });
-  window.addEventListener("appinstalled", () => announce("Fridge Menu installed.", "success"));
+  window.addEventListener("appinstalled", () => announce(t("appInstalled"), "success"));
 
   window.addEventListener("storage", (event) => {
     if ((event.storageArea && event.storageArea !== storage) || (event.key !== STORAGE_KEY && event.key !== null)) return;
     const externalRaw = event.key === null ? null : event.newValue;
     if (externalRaw === lastKnownRaw) return;
     if (hasSessionOnlyChanges) {
-      announce("Another tab changed saved data. This tab has session-only changes; reload before saving again.", "warning");
+      announce(t("anotherTabConflict"), "warning");
       return;
     }
     const external = parseStoredState(externalRaw);
     applyState(external);
     lastKnownRaw = externalRaw;
     refreshRenderedStatePreservingFocus();
-    announce("Updated from another tab.");
+    announce(t("updatedFromTab"));
   });
 
   document.addEventListener("visibilitychange", () => {
@@ -670,8 +696,8 @@ function boot() {
     const syncStatus = syncFromStorageIfChanged();
     refreshRenderedStatePreservingFocus();
     scheduleDayRollover();
-    if (syncStatus === "updated") announce("Updated from saved data after returning to this tab.");
-    if (syncStatus === "blocked") announce("Saved data could not be checked after returning to this tab.", "warning");
+    if (syncStatus === "updated") announce(t("updatedOnReturn"));
+    if (syncStatus === "blocked") announce(t("checkBlockedOnReturn"), "warning");
   });
 
   render();
@@ -680,12 +706,12 @@ function boot() {
   renderHistory();
   scheduleDayRollover();
   announce(storageReadBlocked
-    ? "This browser blocked local storage; changes last only for this session."
-    : ingredients.length ? `Restored ${ingredients.length} locally saved ingredients.` : "Ready for your ingredients.",
+    ? t("storageBlocked")
+    : ingredients.length ? t("restoredIngredients", { count: ingredients.length }) : t("readyForIngredients"),
   storageReadBlocked ? "warning" : "neutral");
 
   if ("serviceWorker" in navigator && window.isSecureContext && location.protocol !== "file:") {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => announce("Offline caching is unavailable in this browser.", "warning"));
+    navigator.serviceWorker.register("./service-worker.js").catch(() => announce(t("offlineCacheUnavailable"), "warning"));
   }
 }
 

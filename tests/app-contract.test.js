@@ -357,18 +357,50 @@ test("remove control guarantees a 44 by 44 pixel touch target", async () => {
 });
 
 test("form errors identify and focus invalid fields and install results are announced", async () => {
-  const app = await read("app.js");
+  const [app, i18n] = await Promise.all([read("app.js"), read("i18n.js")]);
   assert.match(app, /field\.setAttribute\("aria-invalid", "true"\)/);
   assert.match(app, /invalidFields\[0\]\?\.focus\(\)/);
   assert.match(app, /installPrompt\.userChoice/);
-  assert.match(app, /Installation (?:accepted|dismissed|could not be started)/);
+  assert.match(app, /t\((?:choice\?\.outcome === "accepted" \? )?"install(?:Accepted|Dismissed|Failed)"/);
+  assert.match(i18n, /Installation (?:accepted|dismissed|could not be started)/);
   assert.match(app, /document\.querySelector\("\.brand"\)\.focus\(\)/);
 });
 
 test("expired entries are refused before they reach local state", async () => {
-  const app = await read("app.js");
+  const [app, i18n] = await Promise.all([read("app.js"), read("i18n.js")]);
   assert.match(app, /getExpiryStatus\(expiryInput\.value\) === "expired"/);
-  assert.match(app, /Remove expired ingredients before adding new ones\./);
+  assert.match(app, /t\("errorExpiredNotAdded"\)/);
+  assert.match(i18n, /Remove expired ingredients before adding new ones\./);
+});
+
+test("expiry date is optional and undated ingredients fall back to stable urgency", async () => {
+  const [app, html] = await Promise.all([read("app.js"), read("index.html")]);
+  assert.match(app, /expiryInput\.value && getExpiryStatus\(expiryInput\.value\) === "expired"/);
+  assert.match(app, /urgency: "stable", sequence: nextSequence\+\+/);
+  assert.doesNotMatch(html, /id="ingredient-expiry"[^>]*\srequired/);
+  assert.match(html, /data-i18n="expiryLabel"/);
+});
+
+test("UI is fully localized with matching English and Korean string tables", async () => {
+  const [app, html] = await Promise.all([read("app.js"), read("index.html")]);
+  const { STRINGS, translate, detectLocale, normalizeLocale } = await import("../i18n.js");
+  assert.deepEqual(Object.keys(STRINGS.ko).sort(), Object.keys(STRINGS.en).sort(), "every English string needs a Korean counterpart");
+  for (const key of ["heroCopy", "menuIntro", "privacyCopy", "menuReady", "errorDuplicate", "suggestionsEmpty"]) {
+    assert.match(STRINGS.ko[key], /[가-힣]/, `Korean table entry ${key} must be Korean`);
+  }
+  assert.equal(translate("ko", "ingredientAdded", { name: "계란" }), "‘계란’ 담았어요.");
+  assert.equal(translate("en", "suggestionsEmpty", { min: 3, max: 8 }), "Add 3–8 ingredients, then make a menu.");
+  assert.equal(detectLocale(["fr-FR", "ko-KR"]), "ko");
+  assert.equal(detectLocale(["de-DE"]), "en");
+  assert.equal(normalizeLocale("EN-GB"), "en");
+  assert.match(app, /applyStaticTranslations\(document, locale\)/);
+  assert.match(app, /langToggle\.addEventListener\("click"/);
+  assert.match(app, /saveStoredLocale\(storage, locale\)/);
+  assert.match(app, /generateSuggestions\(ingredients, undefined, locale\)/);
+  assert.match(html, /id="lang-toggle"/);
+  for (const key of ["skipLink", "heroCopy", "fridgeHeading", "menuHeading", "privacyCopy", "footerText"]) {
+    assert.match(html, new RegExp(`data-i18n="${key}"`), `index.html must localize ${key}`);
+  }
 });
 
 test("README documents date-backed sorting and expired-ingredient exclusion", async () => {
@@ -381,7 +413,7 @@ test("offline shell contains only relative same-origin assets", async () => {
   const worker = await read("service-worker.js");
   const manifest = JSON.parse(await read("manifest.webmanifest"));
   assert.doesNotMatch(worker, /["']https?:\/\//i);
-  for (const asset of ["./index.html", "./styles.css", "./app.js", "./meal-engine.js", "./manifest.webmanifest"]) assert.ok(worker.includes(`"${asset}"`));
+  for (const asset of ["./index.html", "./styles.css", "./app.js", "./meal-engine.js", "./i18n.js", "./manifest.webmanifest"]) assert.ok(worker.includes(`"${asset}"`));
   assert.doesNotMatch(worker, /ad-boundary/);
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.start_url, "./");
@@ -442,11 +474,11 @@ test("rerendered controls restore focus and expose changing state in accessible 
   assert.match(app, /function restoreDynamicFocus\(snapshot\)/);
   assert.ok((app.match(/refreshRenderedStatePreservingFocus\(\)/g) ?? []).length >= 4);
   assert.match(html, /id="history-heading" tabindex="-1"/);
-  assert.match(app, /count\.setAttribute\("aria-label", `Ingredient count: \$\{ingredients\.length\} of \$\{MAX_INGREDIENTS\}`\)/);
+  assert.match(app, /count\.setAttribute\("aria-label", t\("ingredientCountLabel", \{ count: ingredients\.length, max: MAX_INGREDIENTS \}\)\)/);
 });
 
 test("user values are rendered with textContent and browser workflow persists all local state", async () => {
-  const app = await read("app.js");
+  const [app, i18n] = await Promise.all([read("app.js"), read("i18n.js")]);
   assert.doesNotMatch(app, /innerHTML\s*=/);
   assert.match(app, /ingredientName\.textContent = item\.name/);
   assert.match(app, /heading\.textContent = suggestion\.title/);
@@ -457,13 +489,14 @@ test("user values are rendered with textContent and browser workflow persists al
   assert.match(app, /history\.push/);
   assert.match(app, /beforeinstallprompt/);
   assert.ok((app.match(/const result = await persist\(/g) ?? []).length >= 5);
-  assert.match(app, /for this session only; safe multi-tab saving is unavailable\./);
+  assert.match(i18n, /for this session only; safe multi-tab saving is unavailable\./);
   assert.match(app, /window\.addEventListener\("storage"/);
   assert.match(app, /event\.key !== STORAGE_KEY && event\.key !== null/);
   assert.match(app, /function syncFromStorageIfChanged\(\)/);
   assert.match(app, /const latestRaw = storage\.getItem\(STORAGE_KEY\)/);
-  assert.match(app, /Updated from saved data after returning to this tab\./);
-  assert.match(app, /Another tab changed saved data/);
+  assert.match(app, /t\("updatedOnReturn"\)/);
+  assert.match(i18n, /Updated from saved data after returning to this tab\./);
+  assert.match(i18n, /Another tab changed saved data/);
 });
 
 test("package has no dependency or install surface", async () => {
@@ -722,7 +755,7 @@ test("Play feature graphic is a deterministic 1024 by 500 PNG", async () => {
 test("source tree and build output stay inside the release allowlists", async () => {
   const top = (await readdir(root)).sort();
   assert.deepEqual(top.filter((name) => ![".git", ".hermes", "dist"].includes(name)), [
-    ".github", ".gitignore", "AGENTS.md", "README.md", "android", "app.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "release", "scripts", "service-worker.js", "styles.css", "tests",
+    ".github", ".gitignore", "AGENTS.md", "README.md", "android", "app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "release", "scripts", "service-worker.js", "styles.css", "tests",
   ]);
-  if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["app.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"]);
+  if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"]);
 });

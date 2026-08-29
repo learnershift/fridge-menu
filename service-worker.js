@@ -1,10 +1,11 @@
-const CACHE_NAME = "fridge-menu-shell-c8c332c5737a9c61";
+const CACHE_NAME = "fridge-menu-shell-f9d916fd9141beb1";
 const APP_SHELL = Object.freeze([
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./meal-engine.js",
+  "./i18n.js",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",

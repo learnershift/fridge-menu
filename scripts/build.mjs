@@ -6,6 +6,7 @@ const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "dist");
 const runtimeFiles = Object.freeze([
   "app.js",
+  "i18n.js",
   "icon-192.png",
   "icon-512.png",
   "icon.svg",

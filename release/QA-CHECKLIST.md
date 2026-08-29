@@ -18,6 +18,9 @@ For every manual item, fill in: `Tester:`, `Device model:`, `Android version:`, 
 
 - [ ] Install a properly authorized test build on a physical Android device.
 - [ ] Add, edit, and remove ingredients; verify expiry ordering and expired-item exclusion.
+- [ ] Verify the app follows the device language (Korean device shows Korean, other devices show English), the in-app language toggle switches every visible string, and the choice survives an app restart.
+- [ ] Add ingredients with no expiry date and confirm they are accepted, labeled as date-free, and sorted after dated ingredients.
+- [ ] Generate menus with rice + egg, with kimchi, and with vegetables only; confirm the three directions differ and match the ingredients.
 - [ ] Generate menus, favorite an item, inspect history, close the app, reopen it, and verify local persistence.
 - [ ] Verify touch targets, focus indication, text scaling, portrait layout, and reduced-motion behavior.
 - [ ] Record device model, Android version, build identity, tester, date, and PASS/FAIL.
@@ -31,7 +34,7 @@ For every manual item, fill in: `Tester:`, `Device model:`, `Android version:`, 
 
 ## 4. TalkBack accessibility QA (owner/device required)
 
-- [ ] Navigate every interactive control using TalkBack only.
+- [ ] Navigate every interactive control using TalkBack only, in both English and Korean UI language.
 - [ ] Confirm labels, roles, state changes, errors, headings, reading order, and live announcements are understandable.
 - [ ] Confirm keyboard/switch focus is visible and no control traps focus.
 

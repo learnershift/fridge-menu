@@ -20,7 +20,7 @@ const expectedIdentity = Object.freeze({
   target_sdk: 36,
 });
 const requiredFiles = [
-  "dist/app.js", "dist/icon-192.png", "dist/icon-512.png", "dist/icon.svg", "dist/index.html", "dist/manifest.webmanifest", "dist/meal-engine.js", "dist/service-worker.js", "dist/styles.css",
+  "dist/app.js", "dist/i18n.js", "dist/icon-192.png", "dist/icon-512.png", "dist/icon.svg", "dist/index.html", "dist/manifest.webmanifest", "dist/meal-engine.js", "dist/service-worker.js", "dist/styles.css",
   "release/store-assets/fridge-menu-icon-512.png", "release/store-assets/fridge-menu-feature-graphic-1024x500.png",
   "release/captures/fridge-menu-01-empty-home-1080x1920.png",
   "release/captures/fridge-menu-02-use-first-list-1080x1920.png",

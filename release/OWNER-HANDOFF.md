@@ -46,6 +46,7 @@ Re-confirm every answer against the exact signed candidate before saving it in P
 1. Finalize the four privacy values above, approve stable HTTPS hosting, publish the policy, and enter its URL in Play Console. Require zero OWNER_REQUIRED markers in the public policy and listing before any upload.
 2. After a fresh internal-test upload approval, upload the signed AAB to internal testing. Record the tester list, feedback channel, rollout status, opt-in URL, and test dates. Each tester must open the opt-in URL with the matching Google account, install from the Play Store, and record the delivered version and application identity before completing the exact QA checklist.
 3. Use the four tracked 1080×1920 screenshots, 512×512 icon, and alpha-free 1024×500 feature graphic only if they still match the signed candidate.
+3a. Enter the en-US listing copy as the default language and add the ko-KR localized listing from `release/play-listing.md` (app name 냉장고 메뉴). Korean store screenshots are optional but recommended for the ko-KR listing.
 4. Complete app access, ads, Data safety, target audience, content rating, Health apps declaration, Government apps, Financial features, and Advertising ID forms using the table above.
 5. Confirm production-track availability and choose country availability only under the fresh production submission approval. Readiness does not authorize any country or region.
 6. Final submission, publication, visibility changes, and production rollout each require fresh owner approval for the exact target.
