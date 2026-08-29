@@ -6,15 +6,16 @@ const width = 1024;
 const height = 500;
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "release/store-assets/fridge-menu-feature-graphic-1024x500.png");
-const pixels = Buffer.alloc(width * height * 4);
+const storeIconOutput = resolve(root, "release/store-assets/fridge-menu-icon-512.png");
+const pixels = Buffer.alloc(width * height * 3);
 const palette = {
-  cream: [251, 248, 239, 255], green: [23, 63, 53, 255], leaf: [47, 125, 99, 255],
-  gold: [231, 166, 75, 255], lime: [233, 244, 106, 255], ink: [23, 63, 53, 255],
+  cream: [251, 248, 239], green: [23, 63, 53], leaf: [47, 125, 99],
+  gold: [231, 166, 75], lime: [233, 244, 106], ink: [23, 63, 53],
 };
 
 function set(x, y, color) {
   if (x < 0 || y < 0 || x >= width || y >= height) return;
-  const index = (y * width + x) * 4;
+  const index = (y * width + x) * 3;
   pixels.set(color, index);
 }
 function rect(x, y, w, h, color) {
@@ -64,9 +65,69 @@ text("MENU", 72, 230, 21, palette.green);
 rect(72, 401, 424, 12, palette.gold);
 text("USE FIRST", 72, 438, 7, palette.green);
 
-const raw = Buffer.alloc((width * 4 + 1) * height);
-for (let y = 0; y < height; y += 1) { raw[y * (width * 4 + 1)] = 0; pixels.copy(raw, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4); }
-const header = Buffer.alloc(13); header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 6;
+const raw = Buffer.alloc((width * 3 + 1) * height);
+for (let y = 0; y < height; y += 1) { raw[y * (width * 3 + 1)] = 0; pixels.copy(raw, y * (width * 3 + 1) + 1, y * width * 3, (y + 1) * width * 3); }
+const header = Buffer.alloc(13); header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4); header[8] = 8; header[9] = 2;
 await mkdir(resolve(root, "release/store-assets"), { recursive: true });
 await writeFile(output, Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", header), chunk("IDAT", deflateSync(raw, { level: 9 })), chunk("IEND", Buffer.alloc(0))]));
-console.log(`STORE_ASSET_OK path=${output} width=${width} height=${height}`);
+
+function encodePng(imageWidth, imageHeight, imagePixels, channels, colorType) {
+  const imageRaw = Buffer.alloc((imageWidth * channels + 1) * imageHeight);
+  for (let y = 0; y < imageHeight; y += 1) {
+    imagePixels.copy(imageRaw, y * (imageWidth * channels + 1) + 1, y * imageWidth * channels, (y + 1) * imageWidth * channels);
+  }
+  const imageHeader = Buffer.alloc(13);
+  imageHeader.writeUInt32BE(imageWidth, 0);
+  imageHeader.writeUInt32BE(imageHeight, 4);
+  imageHeader[8] = 8;
+  imageHeader[9] = colorType;
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", imageHeader),
+    chunk("IDAT", deflateSync(imageRaw, { level: 9 })),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+function encodeRgbPng(imageWidth, imageHeight, imagePixels) {
+  return encodePng(imageWidth, imageHeight, imagePixels, 3, 2);
+}
+
+function encodeRgbaPng(imageWidth, imageHeight, rgbPixels) {
+  const rgbaPixels = Buffer.alloc(imageWidth * imageHeight * 4);
+  for (let source = 0, target = 0; source < rgbPixels.length; source += 3, target += 4) {
+    rgbaPixels[target] = rgbPixels[source];
+    rgbaPixels[target + 1] = rgbPixels[source + 1];
+    rgbaPixels[target + 2] = rgbPixels[source + 2];
+    rgbaPixels[target + 3] = 255;
+  }
+  return encodePng(imageWidth, imageHeight, rgbaPixels, 4, 6);
+}
+
+function generateIconPixels(size) {
+  const image = Buffer.alloc(size * size * 3);
+  const put = (x, y, color) => {
+    if (x < 0 || y < 0 || x >= size || y >= size) return;
+    image.set(color, (y * size + x) * 3);
+  };
+  const fill = (color) => {
+    for (let y = 0; y < size; y += 1) for (let x = 0; x < size; x += 1) put(x, y, color);
+  };
+  const drawEllipse = (cx, cy, rx, ry, color) => {
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y += 1) {
+      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x += 1) {
+        if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) put(x, y, color);
+      }
+    }
+  };
+  fill(palette.green);
+  drawEllipse(size * 0.5, size * 0.5, size * 0.37, size * 0.37, palette.gold);
+  drawEllipse(size * 0.5, size * 0.61, size * 0.31, size * 0.2, palette.cream);
+  drawEllipse(size * 0.47, size * 0.39, size * 0.23, size * 0.13, palette.leaf);
+  drawEllipse(size * 0.57, size * 0.33, size * 0.12, size * 0.065, palette.lime);
+  return image;
+}
+
+for (const size of [192, 512]) await writeFile(resolve(root, `icon-${size}.png`), encodeRgbPng(size, size, generateIconPixels(size)));
+await writeFile(storeIconOutput, encodeRgbaPng(512, 512, generateIconPixels(512)));
+console.log(`STORE_ASSET_OK feature=${output} icon=${storeIconOutput}`);

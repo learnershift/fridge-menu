@@ -35,10 +35,10 @@ test("expired ingredients stay visible in ordering but cannot generate meal guid
     { id: "later", name: "Rice", expiryDate: "2026-08-05", sequence: 2 },
   ];
   assert.deepEqual(sortUseFirst(records, "2026-08-01").map((item) => item.urgency), ["expired", "use-now", "stable"]);
-  assert.deepEqual(validateIngredients(records, "2026-08-01"), {
-    ok: false,
-    message: "Remove expired ingredients before making a menu.",
-  });
+  const validation = validateIngredients(records, "2026-08-01");
+  assert.equal(validation.ok, false);
+  assert.equal(validation.code, "expired");
+  assert.equal(validation.message, "Remove expired ingredients before making a menu.");
   assert.deepEqual(generateSuggestions(records, "2026-08-01"), []);
 });
 
@@ -58,11 +58,13 @@ test("normalization trims and collapses ASCII whitespace", () => {
   assert.equal(normalizeName("  green\t  beans\n"), "green beans");
 });
 
-test("validation enforces the 3-8 boundary", () => {
+test("validation enforces the 3-8 boundary and reports stable codes", () => {
   assert.equal(MIN_INGREDIENTS, 3);
   assert.equal(MAX_INGREDIENTS, 8);
   assert.equal(validateIngredients(sample.slice(0, 2)).ok, false);
+  assert.equal(validateIngredients(sample.slice(0, 2)).code, "count-out-of-range");
   assert.equal(validateIngredients(sample.slice(0, 3)).ok, true);
+  assert.equal(validateIngredients(sample.slice(0, 3)).code, "ready");
   const nine = Array.from({ length: 9 }, (_, sequence) => ({ id: String(sequence), name: `item ${sequence}`, urgency: "stable", sequence }));
   assert.equal(validateIngredients(nine.slice(0, 8)).ok, true);
   assert.equal(validateIngredients(nine).ok, false);
@@ -70,7 +72,10 @@ test("validation enforces the 3-8 boundary", () => {
 
 test("duplicates are rejected case-insensitively after normalization", () => {
   const duplicate = [...sample.slice(0, 3), { id: "x", name: " spinach", urgency: "stable", sequence: 4 }];
-  assert.match(validateIngredients(duplicate).message, /already/);
+  const validation = validateIngredients(duplicate);
+  assert.equal(validation.code, "duplicate");
+  assert.equal(validation.params.name, "spinach");
+  assert.match(validation.message, /already/);
   assert.deepEqual(generateSuggestions(duplicate), []);
 });
 
@@ -78,13 +83,82 @@ test("use-first sorting prioritizes urgency then insertion sequence", () => {
   assert.deepEqual(sortUseFirst(sample).map((item) => item.name), ["Spinach", "Tofu", "Mushrooms", "Rice"]);
 });
 
-test("suggestions are deterministic, three in count, and rotate the anchor", () => {
+test("suggestions are deterministic, distinct, and keep the use-first ingredient as every anchor", () => {
   const first = generateSuggestions(sample);
   const second = generateSuggestions(structuredClone(sample));
   assert.equal(first.length, 3);
   assert.deepEqual(first, second);
-  assert.deepEqual(first.map((item) => item.anchor), ["Spinach", "Tofu", "Mushrooms"]);
-  assert.deepEqual(first[0].ingredients, ["Spinach", "Tofu", "Mushrooms", "Rice"]);
+  assert.deepEqual(first.map((item) => item.anchor), ["Spinach", "Spinach", "Spinach"]);
+  assert.equal(new Set(first.map((item) => item.title)).size, 3, "the three menu titles must be genuinely different");
+  assert.equal(new Set(first.map((item) => item.method)).size, 3, "the three cooking methods must be genuinely different");
+  for (const suggestion of first) {
+    assert.deepEqual(suggestion.ingredients, ["Spinach", "Tofu", "Mushrooms", "Rice"]);
+    assert.ok(suggestion.minutes >= 10 && suggestion.minutes <= 30);
+    assert.ok(["easy", "normal"].includes(suggestion.difficulty));
+  }
+});
+
+test("suggestions support a deterministic offset for the next three ranked templates", () => {
+  const first = generateSuggestions(sample, undefined, "en");
+  const alternatives = generateSuggestions(sample, undefined, "en", { offset: 3 });
+  assert.equal(alternatives.length, 3);
+  assert.deepEqual(alternatives, generateSuggestions(structuredClone(sample), undefined, "en", { offset: 3 }));
+  assert.deepEqual(alternatives.map((item) => item.id), ["suggestion-4", "suggestion-5", "suggestion-6"]);
+  assert.ok(alternatives.every((item) => !first.some((primary) => primary.title === item.title)));
+});
+
+test("suggestions adapt to what the ingredients actually are", () => {
+  const riceAndEgg = generateSuggestions([
+    { id: "a", name: "Egg", urgency: "use-now", sequence: 0 },
+    { id: "b", name: "Rice", urgency: "stable", sequence: 1 },
+    { id: "c", name: "Spinach", urgency: "use-soon", sequence: 2 },
+  ]);
+  assert.ok(riceAndEgg.some((item) => /fried rice/i.test(item.title)), "rice plus egg must surface a fried-rice direction");
+
+  const noodles = generateSuggestions([
+    { id: "a", name: "Noodles", urgency: "stable", sequence: 0 },
+    { id: "b", name: "Mushrooms", urgency: "use-now", sequence: 1 },
+    { id: "c", name: "Scallion", urgency: "use-soon", sequence: 2 },
+  ]);
+  assert.ok(noodles.some((item) => /Noodles/.test(item.title)), "noodle ingredients must surface a noodle direction");
+
+  const vegetablesOnly = generateSuggestions([
+    { id: "a", name: "Beans", urgency: "use-now", sequence: 0 },
+    { id: "b", name: "Corn", urgency: "use-soon", sequence: 1 },
+    { id: "c", name: "Tomatoes", urgency: "stable", sequence: 2 },
+  ]);
+  assert.ok(vegetablesOnly.some((item) => /salad/i.test(item.title)), "vegetable-only lists must surface a fresh direction");
+});
+
+test("unknown ingredients still produce three distinct menus", () => {
+  const unknown = generateSuggestions([
+    { id: "a", name: "Mystery jar", urgency: "use-now", sequence: 0 },
+    { id: "b", name: "Leftover box", urgency: "use-soon", sequence: 1 },
+    { id: "c", name: "Frozen block", urgency: "stable", sequence: 2 },
+  ]);
+  assert.equal(unknown.length, 3);
+  assert.equal(new Set(unknown.map((item) => item.title)).size, 3);
+  assert.equal(new Set(unknown.map((item) => item.method)).size, 3);
+});
+
+test("Korean ingredient names are understood and Korean output is Korean", () => {
+  const records = [
+    { id: "a", name: "계란", urgency: "use-now", sequence: 0 },
+    { id: "b", name: "밥", urgency: "stable", sequence: 1 },
+    { id: "c", name: "김치", urgency: "use-soon", sequence: 2 },
+  ];
+  const korean = generateSuggestions(records, "2026-08-01", "ko");
+  assert.equal(korean.length, 3);
+  assert.ok(korean.some((item) => item.title.includes("볶음밥")), "밥과 계란은 볶음밥 방향을 만들어야 한다");
+  assert.ok(korean.some((item) => item.title.includes("찌개")), "김치는 찌개 방향을 만들어야 한다");
+  for (const suggestion of korean) {
+    assert.match(suggestion.title, /[가-힣]/);
+    assert.match(suggestion.method, /[가-힣]/);
+    assert.match(suggestion.useFirstReason, /[가-힣]/);
+  }
+  const english = generateSuggestions(records, "2026-08-01", "en");
+  assert.ok(english.some((item) => /fried rice/i.test(item.title)), "한국어 재료 이름도 영어 로케일에서 인식되어야 한다");
+  assert.deepEqual(korean.map((item) => item.ingredients), english.map((item) => item.ingredients));
 });
 
 test("date-backed suggestions are deterministic and mention no unavailable food", () => {
@@ -96,6 +170,8 @@ test("date-backed suggestions are deterministic and mention no unavailable food"
   const first = generateSuggestions(records, "2026-08-01");
   assert.equal(first.length, 3);
   assert.deepEqual(first, generateSuggestions(structuredClone(records), "2026-08-01"));
+  assert.deepEqual(first.map((item) => item.anchor), ["Beans", "Beans", "Beans"]);
+  assert.ok(first.every((item) => item.ingredients.join(",") === "Beans,Corn,Tomatoes"));
   const available = new Set(records.map((item) => item.name));
   for (const suggestion of first) {
     assert.ok(suggestion.ingredients.every((name) => available.has(name)));

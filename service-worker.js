@@ -1,12 +1,15 @@
-const CACHE_NAME = "fridge-menu-shell-v3";
+const CACHE_NAME = "fridge-menu-shell-5f3fee69d6cca611";
 const APP_SHELL = Object.freeze([
   "./",
   "./index.html",
+  "./privacy.html",
   "./styles.css",
   "./app.js",
   "./meal-engine.js",
-  "./ad-boundary.js",
+  "./i18n.js",
   "./manifest.webmanifest",
+  "./icon-192.png",
+  "./icon-512.png",
   "./icon.svg",
 ]);
 
@@ -34,6 +37,6 @@ self.addEventListener("fetch", (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
       }
       return response;
-    }).catch(() => caches.match("./index.html"))),
+    }).catch(() => event.request.mode === "navigate" ? caches.match("./index.html") : Response.error())),
   );
 });

@@ -1,39 +1,71 @@
-import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { spawnSync } from "node:child_process";
-import { computeReleaseChecks, requirePassingChecks } from "./release-checks.mjs";
+import { computeReleaseChecks, inspectAabSigning, requirePassingChecks } from "./release-checks.mjs";
+import {
+  assertCleanGitTree,
+  assertGitIdentityUnchanged,
+  fileEvidence,
+  gitIdentity,
+  inspectAabArtifact,
+} from "./release-evidence-lib.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const output = resolve(root, "release/artifacts/release-manifest.json");
-const files = ["dist/ad-boundary.js", "dist/app.js", "dist/icon.svg", "dist/index.html", "dist/manifest.webmanifest", "dist/meal-engine.js", "dist/service-worker.js", "dist/styles.css", "release/store-assets/fridge-menu-icon-512.png", "release/store-assets/fridge-menu-feature-graphic-1024x500.png"];
-const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" });
-if (revision.status !== 0) throw new Error("Cannot bind release manifest: git revision unavailable.");
-const checks = await computeReleaseChecks(root);
-requirePassingChecks(checks);
-const digest = (value) => createHash("sha256").update(value).digest("hex");
-const entries = [];
-for (const relativePath of files) {
-  const bytes = await readFile(resolve(root, relativePath));
-  entries.push({ path: relativePath, bytes: bytes.length, sha256: digest(bytes) });
-}
-const aab = resolve(root, "android/app/build/outputs/bundle/release/app-release.aab");
-try {
-  const bytes = await readFile(aab);
-  entries.push({ path: "android/app/build/outputs/bundle/release/app-release.aab", bytes: bytes.length, sha256: digest(bytes), unsigned: true });
-} catch (error) {
-  if (error.code !== "ENOENT") throw error;
-}
-await mkdir(resolve(root, "release/artifacts"), { recursive: true });
-const releaseEvidence = {
-  schemaVersion: 1,
-  gitRevision: revision.stdout.trim(),
-  generatedAt: new Date().toISOString(),
+const aabPath = "android/app/build/outputs/bundle/release/app-release.aab";
+const expectedIdentity = Object.freeze({
   application_id: "com.learnershift.fridgemenu",
   version_code: 1,
   version_name: "1.0.0",
+  min_sdk: 23,
+  target_sdk: 36,
+});
+const requiredFiles = [
+  "dist/app.js", "dist/i18n.js", "dist/icon-192.png", "dist/icon-512.png", "dist/icon.svg", "dist/index.html", "dist/manifest.webmanifest", "dist/meal-engine.js", "dist/privacy.html", "dist/service-worker.js", "dist/styles.css",
+  "release/store-assets/fridge-menu-icon-512.png", "release/store-assets/fridge-menu-feature-graphic-1024x500.png",
+  "release/captures/fridge-menu-01-empty-home-1080x1920.png",
+  "release/captures/fridge-menu-02-use-first-list-1080x1920.png",
+  "release/captures/fridge-menu-03-menu-results-1080x1920.png",
+  "release/captures/fridge-menu-04-favorites-history-1080x1920.png",
+];
+
+await assertCleanGitTree(root);
+const source = gitIdentity(root);
+const checks = await computeReleaseChecks(root);
+requirePassingChecks(checks);
+
+const files = [];
+for (const relativePath of requiredFiles) {
+  const entry = await fileEvidence(root, relativePath);
+  files.push(relativePath.startsWith("release/captures/") ? { ...entry, capture_origin: "LOCAL_CHROME_SIMULATION" } : entry);
+}
+
+const inspected = await inspectAabArtifact(root, aabPath, expectedIdentity);
+const signing = inspectAabSigning(resolve(root, aabPath));
+if (signing === "UNKNOWN") throw new Error("AAB signing status is unknown.");
+const aab = { path: inspected.path, bytes: inspected.bytes, sha256: inspected.sha256, signing };
+
+const reproducibility = JSON.parse(await readFile(resolve(root, "release/artifacts/aab-reproducibility.json"), "utf8"));
+if (reproducibility.gitRevision !== source.gitRevision || reproducibility.sourceTree !== source.sourceTree ||
+    reproducibility.first_sha256 !== aab.sha256 || reproducibility.second_sha256 !== aab.sha256) {
+  throw new Error("AAB reproducibility evidence is stale or mismatched.");
+}
+
+await assertCleanGitTree(root);
+assertGitIdentityUnchanged(source, gitIdentity(root));
+
+const releaseEvidence = {
+  schemaVersion: 2,
+  ...source,
+  generatedAt: new Date().toISOString(),
+  identity: inspected.identity,
   checks,
-  files: entries,
+  toolchain: reproducibility.toolchain,
+  reproducibility: { first_sha256: reproducibility.first_sha256, second_sha256: reproducibility.second_sha256 },
+  capture_origin: "LOCAL_CHROME_SIMULATION",
+  files,
+  aab,
+  packaged_pwa: inspected.packaged_pwa,
 };
+await mkdir(resolve(root, "release/artifacts"), { recursive: true });
 await writeFile(output, `${JSON.stringify(releaseEvidence, null, 2)}\n`);
-console.log(`RELEASE_MANIFEST_OK path=${output} files=${entries.length}`);
+console.log(`RELEASE_MANIFEST_OK path=${output} files=${files.length + 1}`);

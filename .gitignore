@@ -6,9 +6,14 @@ coverage/
 .env
 .env.*
 !.env.example
+# Generated release proof stays out of Git and is retained as a SHA-bound CI artifact.
 release/artifacts/
-release/captures/
+release/captures/*
+!release/captures/fridge-menu-0*-1080x1920.png
+!release/captures/fridge-menu-ko-0*-1080x1920.png
 android/app/src/main/assets/pwa/
 android/.gradle/
 android/app/build/
 android/build/
+*.jks
+*.keystore

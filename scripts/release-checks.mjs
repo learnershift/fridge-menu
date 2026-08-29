@@ -4,28 +4,92 @@ import { spawnSync } from "node:child_process";
 
 const pass = (condition) => condition ? "PASS" : "FAIL";
 
-export function computeStaticReleaseChecks({ css, androidManifest, mainActivity, serviceWorker, adBoundary }) {
+function foldStringConcatenations(source = "") {
+  let folded = String(source);
+  const pattern = /(["'])([^"'\r\n]*)\1\s*\+\s*(["'])([^"'\r\n]*)\3/g;
+  while (pattern.test(folded)) folded = folded.replace(pattern, (_, quote, left, _rightQuote, right) => `${quote}${left}${right}${quote}`);
+  return folded;
+}
+
+function hasRemoteReference(source) {
+  const folded = foldStringConcatenations(source);
+  return /https?:\/\//i.test(folded) || /["'(]\s*\/\/[a-z0-9]/i.test(folded);
+}
+
+function hasExactTouchTarget(css) {
+  const blocks = [...css.matchAll(/\.remove-button\s*\{[^}]*\}/g)].map((match) => match[0]);
+  const block = blocks.join("\n");
+  const values = (property) => [...block.matchAll(new RegExp(`${property}\\s*:\\s*([^;}]*)`, "g"))]
+    .map((match) => match[1].trim());
+  const minWidths = values("min-width");
+  const minHeights = values("min-height");
+  const maximums = [...values("max-width"), ...values("max-height")];
+  return minWidths.length === 1 && minWidths[0] === "2.75rem" &&
+    minHeights.length === 1 && minHeights[0] === "2.75rem" &&
+    maximums.every((value) => value === "none") && !/(?:transform|zoom)\s*:/.test(block);
+}
+
+function hasOnlyAllowedWebViewEntry(mainActivity) {
+  const withoutAllowedEntry = mainActivity.replace(/\b\w+\.loadUrl\s*\(\s*APP_ENTRY\s*\)\s*;/g, "");
+  return /private static final String APP_ENTRY = "file:\/\/\/android_asset\/pwa\/index\.html";/.test(mainActivity) &&
+    !/\.loadUrl\s*\(/.test(withoutAllowedEntry) &&
+    !/\.(?:loadData|loadDataWithBaseURL|postUrl|evaluateJavascript)\s*\(/.test(mainActivity) &&
+    !/\b(?:HttpURLConnection|Socket|WebSocket|OkHttp|URLConnection|Uri\.Builder|Class\.forName|java\.lang\.reflect)\b/.test(mainActivity) &&
+    !/\b(?:getMethod|getDeclaredMethod|getMethods|getDeclaredMethods)\s*\(|\.\s*invoke\s*\(/.test(mainActivity);
+}
+
+function hasOnlyAllowedServiceWorkerFetch(serviceWorker) {
+  const withoutAllowedFetch = serviceWorker.replace(/\bfetch\s*\(\s*event\.request\s*\)/g, "");
+  const folded = foldStringConcatenations(withoutAllowedFetch);
+  return !/\bfetch\s*\(/.test(withoutAllowedFetch) &&
+    !/\b(?:importScripts|WebSocket|EventSource|XMLHttpRequest)\s*\(/.test(serviceWorker) &&
+    !/\[\s*["']fetch["']\s*\]|String\.fromCharCode|\batob\s*\(|Reflect\.get\s*\(/.test(folded);
+}
+
+function hasRelativeAppShell(serviceWorker) {
+  const body = serviceWorker.match(/const APP_SHELL = Object\.freeze\(\[([\s\S]*?)\]\);/)?.[1];
+  if (!body || !/cache\.addAll\(APP_SHELL\)/.test(serviceWorker)) return false;
+  const entries = [...body.matchAll(/(["'])([^"']+)\1/g)].map((match) => match[2]);
+  const remainder = body.replace(/(["'])([^"']+)\1/g, "").replace(/[\s,]/g, "");
+  return !remainder && entries.length > 0 && entries.every((entry) => entry === "./" || /^\.\/[a-z0-9][a-z0-9._/-]*$/i.test(entry));
+}
+
+export function computeStaticReleaseChecks({ css, androidManifest, mainActivity, serviceWorker }) {
   return {
-    accessibility: pass(/\.remove-button\s*\{[^}]*min-width:\s*2\.75rem;[^}]*min-height:\s*2\.75rem;/.test(css)),
-    privacy_security: pass(!/uses-permission/i.test(androidManifest) && !/https?:\/\//i.test(mainActivity) && /networkRequests:\s*false/.test(adBoundary) && /sdkLoaded:\s*false/.test(adBoundary) && /productionIdentifier:\s*null/.test(adBoundary)),
-    offline: pass(!/https?:\/\//i.test(serviceWorker) && /file:\/\/\/android_asset\/pwa\/index\.html/.test(mainActivity)),
+    touch_target_static: pass(hasExactTouchTarget(css)),
+    privacy_security_static: pass(!/uses-permission/i.test(androidManifest) && !hasRemoteReference(mainActivity) &&
+      !/addJavascriptInterface/.test(mainActivity) && hasOnlyAllowedWebViewEntry(mainActivity)),
+    offline_static: pass(!hasRemoteReference(serviceWorker) && hasOnlyAllowedServiceWorkerFetch(serviceWorker) && hasRelativeAppShell(serviceWorker) &&
+      /file:\/\/\/android_asset\/pwa\/index\.html/.test(mainActivity)),
   };
 }
 
 const commandStatus = (command, args, root) => pass(spawnSync(command, args, { cwd: root, encoding: "utf8", shell: true }).status === 0);
 
+export function inspectAabSigning(aabPath) {
+  const command = process.env.JAVA_HOME ? resolve(process.env.JAVA_HOME, "bin/jarsigner") : "jarsigner";
+  const result = spawnSync(command, ["-verify", aabPath], {
+    encoding: "utf8",
+    env: { ...process.env, LC_ALL: "C", LANG: "C" },
+  });
+  if (result.error) return "UNKNOWN";
+  const output = `${result.stdout}\n${result.stderr}`;
+  if (/jar is unsigned/i.test(output)) return "UNSIGNED";
+  if (result.status === 0 && /jar verified/i.test(output)) return "SIGNED";
+  return "UNKNOWN";
+}
+
 export async function computeReleaseChecks(root) {
-  const [css, androidManifest, mainActivity, serviceWorker, adBoundary] = await Promise.all([
+  const [css, androidManifest, mainActivity, serviceWorker] = await Promise.all([
     readFile(resolve(root, "styles.css"), "utf8"),
     readFile(resolve(root, "android/app/src/main/AndroidManifest.xml"), "utf8"),
     readFile(resolve(root, "android/app/src/main/java/com/learnershift/fridgemenu/MainActivity.java"), "utf8"),
     readFile(resolve(root, "service-worker.js"), "utf8"),
-    readFile(resolve(root, "ad-boundary.js"), "utf8"),
   ]);
   return {
     tests: commandStatus(process.execPath, ["--test", "tests/*.test.js"], root),
     build: commandStatus(process.execPath, ["scripts/build.mjs"], root),
-    ...computeStaticReleaseChecks({ css, androidManifest, mainActivity, serviceWorker, adBoundary }),
+    ...computeStaticReleaseChecks({ css, androidManifest, mainActivity, serviceWorker }),
   };
 }
 

@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#173f35">
   <meta name="description" content="Turn the ingredients you already have into deterministic use-first meal ideas.">
   <title>Fridge Menu — use what matters first</title>
@@ -10,26 +11,27 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to main content</a>
+  <a class="skip-link" href="#main" data-i18n="skipLink">Skip to main content</a>
   <header class="site-header">
-    <a class="brand" href="./" aria-label="Fridge Menu home">
+    <a class="brand" href="./index.html" aria-label="Fridge Menu home" data-i18n-aria-label="brandAria">
       <span class="brand__mark" aria-hidden="true">FM</span>
       <span>Fridge Menu</span>
     </a>
-    <p class="header-note">Local-first · no account needed</p>
-    <button id="install-button" class="button button--quiet" type="button" hidden>Install app</button>
+    <p class="header-note" data-i18n="headerNote">Local-first · no account needed</p>
+    <button id="lang-toggle" class="button button--quiet" type="button" data-i18n="langToggle" data-i18n-aria-label="langToggleAria">한국어</button>
+    <button id="install-button" class="button button--quiet" type="button" data-i18n="installApp" hidden>Install app</button>
   </header>
 
-  <main id="main">
+  <main id="main" tabindex="-1">
     <section class="hero" aria-labelledby="hero-heading">
       <div>
-        <p class="eyebrow">Cook the food that needs you</p>
-        <h1 id="hero-heading">A calmer answer to<br><em>“what should we eat?”</em></h1>
-        <p class="hero__copy">Add what is in your fridge, mark what needs using first, and get three dependable meal directions. Your list stays in this browser.</p>
+        <p class="eyebrow" data-i18n="heroEyebrow">Cook the food that needs you</p>
+        <h1 id="hero-heading"><span data-i18n="heroTitleLead">A calmer answer to</span><br><em data-i18n="heroTitleQuote">“what should we eat?”</em></h1>
+        <p class="hero__copy" data-i18n="heroCopy">Add what is in your fridge, and get three dependable meal directions led by what needs using first. Your list stays on this device.</p>
       </div>
-      <aside class="hero-card" aria-label="How it works">
+      <aside class="hero-card" aria-label="How it works" data-i18n-aria-label="heroCardAria">
         <span class="hero-card__number">3</span>
-        <p><strong>ideas, every time.</strong><br>Urgent ingredients lead. Your original order breaks ties. No random shuffle.</p>
+        <p><strong data-i18n="heroCardStrong">ideas, every time.</strong><br><span data-i18n="heroCardCopy">Urgent ingredients lead. Your original order breaks ties. No random shuffle.</span></p>
       </aside>
     </section>
 
@@ -37,72 +39,89 @@
       <section class="panel pantry-panel" aria-labelledby="fridge-heading">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Step 1</p>
-            <h2 id="fridge-heading">Build your fridge list</h2>
+            <p class="eyebrow" data-i18n="step1Eyebrow">Step 1</p>
+            <h2 id="fridge-heading" data-i18n="fridgeHeading">Build your fridge list</h2>
           </div>
-          <span id="ingredient-count" class="count-badge" aria-label="Ingredient count">0 / 8</span>
+          <span id="ingredient-count" class="count-badge" aria-label="Ingredient count: 0 of 8">0 / 8</span>
         </div>
 
         <form id="ingredient-form" class="ingredient-form" novalidate>
           <div class="field field--grow">
-            <label for="ingredient-name">Ingredient</label>
-            <input id="ingredient-name" name="ingredient" type="text" maxlength="48" autocomplete="off" placeholder="e.g. spinach" required>
+            <label for="ingredient-name" data-i18n="ingredientLabel">Ingredient</label>
+            <input id="ingredient-name" name="ingredient" type="text" maxlength="48" autocomplete="off" placeholder="e.g. spinach" data-i18n-placeholder="ingredientPlaceholder" aria-describedby="status-message" required>
           </div>
           <div class="field">
-            <label for="ingredient-expiry">Expiry date</label>
-            <input id="ingredient-expiry" name="expiry" type="date" required>
+            <label for="ingredient-expiry" data-i18n="expiryLabel">Expiry date (optional)</label>
+            <input id="ingredient-expiry" name="expiry" type="date" aria-describedby="status-message">
           </div>
-          <button class="button button--primary" type="submit">Add ingredient</button>
+          <button class="button button--primary" type="submit" data-i18n="addIngredient">Add ingredient</button>
         </form>
+        <div class="quick-ingredients" aria-labelledby="quick-ingredients-heading">
+          <p id="quick-ingredients-heading" class="quick-ingredients__heading" data-i18n="quickIngredientsHeading">Common ingredients</p>
+          <div id="quick-ingredients" class="quick-ingredient-chips"></div>
+        </div>
 
         <p id="status-message" class="status-message" role="status" aria-live="polite"></p>
-        <ol id="ingredient-list" class="ingredient-list" aria-label="Ingredients, sorted by use-first priority"></ol>
+        <ol id="ingredient-list" class="ingredient-list" aria-label="Ingredients, sorted by use-first priority" data-i18n-aria-label="ingredientListAria"></ol>
 
         <div class="use-first-box">
-          <span>Use-first order</span>
-          <p id="use-first-preview">Your use-first order will appear here.</p>
+          <span data-i18n="useFirstBoxLabel">Use-first order</span>
+          <p id="use-first-preview" data-i18n="useFirstEmpty">Your use-first order will appear here.</p>
         </div>
 
         <div class="panel-actions">
-          <button id="suggest-button" class="button button--accent" type="button" disabled>Make my menu</button>
-          <button id="clear-button" class="button button--quiet" type="button" disabled>Clear list</button>
+          <button id="suggest-button" class="button button--accent" type="button" data-i18n="makeMenu" disabled>Make my menu</button>
+          <button id="clear-button" class="button button--quiet" type="button" data-i18n="clearList" disabled>Clear list</button>
         </div>
       </section>
 
       <section class="panel menu-panel" aria-labelledby="menu-heading">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Step 2</p>
-            <h2 id="menu-heading" tabindex="-1">Your flexible menu</h2>
+            <p class="eyebrow" data-i18n="step2Eyebrow">Step 2</p>
+            <h2 id="menu-heading" tabindex="-1" data-i18n="menuHeading">Your flexible menu</h2>
           </div>
         </div>
-        <p class="section-intro">These are adaptable cooking directions, not recipes or nutrition advice. Use pantry basics and season to your needs.</p>
+        <p class="section-intro" data-i18n="menuIntro">These are adaptable cooking directions, not recipes or nutrition advice. Use pantry basics and season to your needs.</p>
         <div id="suggestions" class="suggestions" aria-live="polite"></div>
+        <button id="alternative-menus-button" class="button button--quiet alternative-menus-button" type="button" hidden></button>
       </section>
     </div>
 
     <div class="workspace secondary-workspace">
       <section class="panel" aria-labelledby="favorites-heading">
-        <div class="section-heading"><div><p class="eyebrow">Saved locally</p><h2 id="favorites-heading">Favorites</h2></div></div>
+        <div class="section-heading"><div><p class="eyebrow" data-i18n="savedLocally">Saved locally</p><h2 id="favorites-heading" tabindex="-1" data-i18n="favoritesHeading">Favorites</h2></div></div>
         <div id="favorites-list" class="suggestions"><p class="empty-state">Favorite a meal idea to keep it here.</p></div>
       </section>
       <section class="panel" aria-labelledby="history-heading">
-        <div class="section-heading"><div><p class="eyebrow">Recent menus</p><h2 id="history-heading">History</h2></div></div>
+        <div class="section-heading"><div><p class="eyebrow" data-i18n="recentMenus">Recent menus</p><h2 id="history-heading" tabindex="-1" data-i18n="historyHeading">History</h2></div></div>
         <div id="history-list" class="history-list"><p class="empty-state">Your recent generated menus will appear here.</p></div>
       </section>
     </div>
 
-    <aside id="ad-placeholder" class="ad-placeholder" aria-label="Nonfunctional advertising placeholder"></aside>
-
     <section class="scope-note" aria-labelledby="scope-heading">
-      <p class="eyebrow">Transparent by design</p>
-      <h2 id="scope-heading">Your food data stays with you.</h2>
-      <p>Fridge Menu works without an account, analytics, tracking, or credentialed APIs. Your pantry, favorites, and history remain in this browser and can be cleared at any time.</p>
+      <p class="eyebrow" data-i18n="scopeEyebrow">Transparent by design</p>
+      <h2 id="scope-heading" data-i18n="scopeHeading">Your food data stays with you.</h2>
+      <p data-i18n="scopeCopy">Fridge Menu works without an account, analytics, tracking, or credentialed APIs. Clear list removes ingredients only. Clear the app or browser storage, or uninstall the app, to remove ingredients, favorites, and history.</p>
+    </section>
+
+    <section id="privacy" class="privacy-policy" aria-labelledby="privacy-heading">
+      <p class="eyebrow" data-i18n="privacyEyebrow">Privacy policy</p>
+      <h2 id="privacy-heading" data-i18n="privacyHeading">Local data, under your control.</h2>
+      <p data-i18n="privacyCopy">Fridge Menu has no account, analytics, advertising SDK, tracking, or remote API. Your ingredient list, favorites, and recent menus stay in local browser or Android WebView storage and are not sent to the publisher or shared with third parties.</p>
+      <h3 data-i18n="privacyRetentionHeading">Data retention and deletion</h3>
+      <p data-i18n="privacyRetentionCopy">Clear list removes ingredients only. Clear the app or browser storage, or uninstall the app, to remove ingredients, favorites, and history. The publisher has no server copy to retain or delete.</p>
+      <h3 data-i18n="privacyRightsHeading">Your privacy rights</h3>
+      <p data-i18n="privacyRightsCopy">Because the publisher does not receive or process this on-device data, it does not act as a controller for that data. Privacy questions may be sent to the monitored developer contact in the Play listing. People in the EEA may also lodge a complaint with their local data-protection authority, and people in Korea may contact the privacy officer identified in the public policy.</p>
+      <h3 data-i18n="privacyChildrenHeading">Children</h3>
+      <p data-i18n="privacyChildrenCopy">Fridge Menu is not directed to children and does not knowingly collect personal information from children.</p>
+      <h3 data-i18n="privacyChangesHeading">Policy changes</h3>
+      <p data-i18n="privacyChangesCopy">Material changes will be posted in this in-app policy and at the public policy URL before they take effect.</p>
     </section>
   </main>
 
   <footer>
-    <p>Fridge Menu · saved only in your browser · no analytics or tracking</p>
+    <p><span data-i18n="footerText">Fridge Menu · saved only in your browser · no analytics or tracking · </span><a href="#privacy" data-i18n="footerPrivacyLink">Privacy</a></p>
   </footer>
   <script type="module" src="./app.js"></script>
 </body>
