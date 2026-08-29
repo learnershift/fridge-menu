@@ -283,21 +283,25 @@ test("HTML contains semantic accessible pantry favorites history and install con
   assert.match(html, /<main id="main" tabindex="-1">/, "skip-link target must accept programmatic focus");
 });
 
-test("privacy policy is available in-app and keeps owner-only identity values explicit", async () => {
-  const [html, policy, handoff] = await Promise.all([
-    read("index.html"), read("release/privacy-policy.md"), read("release/OWNER-HANDOFF.md"),
+test("privacy policy is available in-app and contains the finalized owner identity", async () => {
+  const [html, publicPolicy, policy, handoff] = await Promise.all([
+    read("index.html"), read("privacy.html"), read("release/privacy-policy.md"), read("release/OWNER-HANDOFF.md"),
   ]);
   assert.match(html, /href="#privacy"/);
   assert.match(html, /id="privacy"/);
   assert.match(html, /Data retention and deletion/);
+  assert.match(publicPolicy, /<html lang="ko">/);
+  assert.match(publicPolicy, /<article lang="en"/);
+  assert.match(publicPolicy, /2026-08-29/);
+  assert.doesNotMatch(publicPolicy, /<(?:script|link|img|iframe|object|embed)\b/i);
   for (const heading of ["Data retention and deletion", "Your privacy rights", "Children", "Policy changes"]) {
     assert.match(policy, new RegExp(`## ${heading}`));
   }
-  for (const marker of ["LEGAL_NAME", "PRIVACY_EMAIL", "PUBLIC_POLICY_URL", "PRIVACY_OFFICER"]) {
-    assert.match(policy, new RegExp(`OWNER_REQUIRED:${marker}`));
-  }
+  assert.doesNotMatch(policy, /OWNER_REQUIRED/);
+  assert.match(policy, /주식회사 라봉당스/);
+  assert.match(policy, /송문길/);
   assert.match(handoff, /Owner-supplied privacy values/);
-  for (const document of [html, policy, handoff]) {
+  for (const document of [html, publicPolicy, policy, handoff]) {
     assert.match(document, /Clear list[^.]*ingredients only/i);
     assert.match(document, /clear (?:the )?app or browser storage[^.]*favorites[^.]*history/i);
   }
@@ -413,7 +417,7 @@ test("offline shell contains only relative same-origin assets", async () => {
   const worker = await read("service-worker.js");
   const manifest = JSON.parse(await read("manifest.webmanifest"));
   assert.doesNotMatch(worker, /["']https?:\/\//i);
-  for (const asset of ["./index.html", "./styles.css", "./app.js", "./meal-engine.js", "./i18n.js", "./manifest.webmanifest"]) assert.ok(worker.includes(`"${asset}"`));
+  for (const asset of ["./index.html", "./privacy.html", "./styles.css", "./app.js", "./meal-engine.js", "./i18n.js", "./manifest.webmanifest"]) assert.ok(worker.includes(`"${asset}"`));
   assert.doesNotMatch(worker, /ad-boundary/);
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.start_url, "./");
@@ -755,7 +759,7 @@ test("Play feature graphic is a deterministic 1024 by 500 PNG", async () => {
 test("source tree and build output stay inside the release allowlists", async () => {
   const top = (await readdir(root)).sort();
   assert.deepEqual(top.filter((name) => ![".git", ".hermes", "dist"].includes(name)), [
-    ".github", ".gitignore", "AGENTS.md", "README.md", "android", "app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "release", "scripts", "service-worker.js", "styles.css", "tests",
+    ".github", ".gitignore", "AGENTS.md", "README.md", "android", "app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "privacy.html", "release", "scripts", "service-worker.js", "styles.css", "tests",
   ]);
-  if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"]);
+  if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "privacy.html", "service-worker.js", "styles.css"]);
 });

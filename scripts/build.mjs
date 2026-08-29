@@ -13,6 +13,7 @@ const runtimeFiles = Object.freeze([
   "index.html",
   "manifest.webmanifest",
   "meal-engine.js",
+  "privacy.html",
   "service-worker.js",
   "styles.css",
 ]);

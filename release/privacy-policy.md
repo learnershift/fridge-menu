@@ -1,12 +1,12 @@
 # Fridge Menu privacy policy
 
-Effective date: 2026-08-25
+Effective date: 2026-08-29
 
-Publisher: `[OWNER_REQUIRED:LEGAL_NAME]` (must match the Google Play developer name)
+Publisher: 주식회사 라봉당스 (must match the Google Play developer name)
 
-Privacy contact: `[OWNER_REQUIRED:PRIVACY_EMAIL]`
+Privacy contact: stevensong332@gmail.com
 
-Public policy URL: `[OWNER_REQUIRED:PUBLIC_POLICY_URL]`
+Public policy URL: https://learnershift.github.io/fridge-menu/privacy.html
 
 Fridge Menu has no account, analytics, advertising SDK, tracking, or remote API. The app stores your ingredient list, favorites, and recent menus only in browser or Android WebView storage on your device. This information is not sent to the publisher or shared with third parties.
 
@@ -18,7 +18,7 @@ Clear list removes ingredients only. Clear the app or browser storage, or uninst
 
 Because the publisher does not receive or process data held only in local app storage, the publisher does not act as a data controller for that on-device data. Privacy questions may be sent to the monitored contact above. People in the EEA may lodge a complaint with their local data-protection supervisory authority.
 
-For Korea's Personal Information Protection Act, the privacy officer is `[OWNER_REQUIRED:PRIVACY_OFFICER]`, reachable at `[OWNER_REQUIRED:PRIVACY_EMAIL]`.
+For Korea's Personal Information Protection Act, the privacy officer is 송문길, reachable at stevensong332@gmail.com.
 
 ## Children
 

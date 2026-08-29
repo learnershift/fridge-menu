@@ -101,7 +101,7 @@ export async function inspectAabArtifact(root, relativePath, expectedIdentity) {
   if (!isDeepStrictEqual(identity, expectedIdentity)) throw new Error(`AAB identity mismatch: ${JSON.stringify(identity)}`);
   if (manifestBytes.includes(Buffer.from("uses-permission"))) throw new Error("AAB manifest contains an unexpected permission.");
 
-  const pwaNames = ["app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "service-worker.js", "styles.css"];
+  const pwaNames = ["app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "privacy.html", "service-worker.js", "styles.css"];
   const expectedPwaEntries = pwaNames.map((name) => `base/assets/pwa/${name}`);
   const actualPwaEntries = entries.filter((entry) => entry.startsWith("base/assets/pwa/")).sort();
   if (!isDeepStrictEqual(actualPwaEntries, expectedPwaEntries.sort())) throw new Error("AAB PWA inventory mismatch.");

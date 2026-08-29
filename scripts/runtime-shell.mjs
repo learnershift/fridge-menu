@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 export const CACHED_SHELL_FILES = Object.freeze([
   "index.html",
+  "privacy.html",
   "styles.css",
   "app.js",
   "meal-engine.js",

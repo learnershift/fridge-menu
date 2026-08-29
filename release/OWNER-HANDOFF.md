@@ -2,10 +2,10 @@
 
 ## Owner-supplied privacy values
 
-- `[OWNER_REQUIRED:LEGAL_NAME]`: legal developer or business name matching the Play listing
-- `[OWNER_REQUIRED:PRIVACY_EMAIL]`: monitored privacy contact email
-- `[OWNER_REQUIRED:PUBLIC_POLICY_URL]`: stable public HTTPS policy URL
-- `[OWNER_REQUIRED:PRIVACY_OFFICER]`: Korean privacy officer name
+- `LEGAL_NAME`: 주식회사 라봉당스
+- `PRIVACY_EMAIL`: stevensong332@gmail.com
+- `PUBLIC_POLICY_URL`: https://learnershift.github.io/fridge-menu/privacy.html
+- `PRIVACY_OFFICER`: 송문길
 
 ## Locally reproducible evidence
 
