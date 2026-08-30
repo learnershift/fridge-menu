@@ -44,4 +44,8 @@ Category: Food & Drink
 
 Internal keyword reference — do not paste into Play Console: meal planner, fridge, leftovers, offline cooking, food waste, 냉장고 파먹기, 냉파, 오늘 뭐 먹지
 
-Owner-required fields before submission: public privacy-policy URL, monitored support email, target audience/content rating answers, country availability, and current Play policy declarations.
+Privacy policy URL: https://nuvopilot.com/apps/fridge-menu/privacy/
+
+Support email: support@nuvopilot.com
+
+Owner-required fields before submission: target audience/content rating answers, country availability, and current Play policy declarations.

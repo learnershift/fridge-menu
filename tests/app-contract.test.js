@@ -313,10 +313,14 @@ test("HTML contains semantic accessible pantry favorites history and install con
   assert.match(html, /<main id="main" tabindex="-1">/, "skip-link target must accept programmatic focus");
 });
 
-test("privacy policy is available in-app and contains the finalized owner identity", async () => {
-  const [html, publicPolicy, policy, handoff] = await Promise.all([
+test("privacy policy is available in-app and contains the finalized developer identity", async () => {
+  const [html, publicPolicy, policy, handoff, listing, i18n] = await Promise.all([
     read("index.html"), read("privacy.html"), read("release/privacy-policy.md"), read("release/OWNER-HANDOFF.md"),
+    read("release/play-listing.md"), read("i18n.js"),
   ]);
+  const publicPolicyUrl = "https://nuvopilot.com/apps/fridge-menu/privacy/";
+  const privacyEmail = "support@nuvopilot.com";
+  const englishLegalName = "LABONDANCE Co., Ltd. (주식회사 라봉당스)";
   assert.match(html, /href="#privacy"/);
   assert.match(html, /id="privacy"/);
   assert.match(html, /Data retention and deletion/);
@@ -328,7 +332,17 @@ test("privacy policy is available in-app and contains the finalized owner identi
     assert.match(policy, new RegExp(`## ${heading}`));
   }
   assert.doesNotMatch(policy, /OWNER_REQUIRED/);
-  assert.match(policy, /주식회사 라봉당스/);
+  assert.ok(publicPolicy.includes(`<dt>게시자</dt><dd>주식회사 라봉당스</dd>`));
+  assert.ok(publicPolicy.includes(`<dt>Publisher</dt><dd>${englishLegalName}</dd>`));
+  assert.ok(policy.includes(`Publisher: ${englishLegalName}`));
+  assert.ok(handoff.includes(`\`LEGAL_NAME\`: ${englishLegalName}`));
+  for (const document of [publicPolicy, policy, handoff, listing, i18n]) {
+    assert.ok(document.includes(publicPolicyUrl), "privacy policy URL must use the developer domain");
+    assert.ok(document.includes(privacyEmail), "privacy contact must use the developer domain");
+    assert.doesNotMatch(document, /learnershift\.github\.io\/fridge-menu\/privacy\.html|stevensong332@gmail\.com/);
+  }
+  assert.ok(publicPolicy.includes(`이 정책의 공식 공개본: <a href="${publicPolicyUrl}">${publicPolicyUrl}</a>`));
+  assert.ok(publicPolicy.includes(`The official public copy of this policy: <a href="${publicPolicyUrl}">${publicPolicyUrl}</a>`));
   assert.match(policy, /송문길/);
   assert.match(handoff, /Owner-supplied privacy values/);
   for (const document of [html, publicPolicy, policy, handoff]) {

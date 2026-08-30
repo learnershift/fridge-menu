@@ -2,9 +2,9 @@
 
 ## Owner-supplied privacy values
 
-- `LEGAL_NAME`: 주식회사 라봉당스
-- `PRIVACY_EMAIL`: stevensong332@gmail.com
-- `PUBLIC_POLICY_URL`: https://learnershift.github.io/fridge-menu/privacy.html
+- `LEGAL_NAME`: LABONDANCE Co., Ltd. (주식회사 라봉당스)
+- `PRIVACY_EMAIL`: support@nuvopilot.com
+- `PUBLIC_POLICY_URL`: https://nuvopilot.com/apps/fridge-menu/privacy/
 - `PRIVACY_OFFICER`: 송문길
 
 ## Locally reproducible evidence
