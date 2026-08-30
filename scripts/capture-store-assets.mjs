@@ -77,6 +77,18 @@ function startLocalServer() {
   });
 }
 
+function waitForExit(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolveExit) => child.once("exit", resolveExit));
+}
+
+async function stopChild(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  const exited = waitForExit(child);
+  child.kill();
+  await exited;
+}
+
 let localServer;
 if (verifyDomOnly) {
   const started = await startLocalServer();
@@ -269,7 +281,7 @@ try {
   }
 } finally {
   if (socket) socket.close();
-  browser.kill();
-  if (localServer) localServer.kill();
-  await rm(profile, { recursive: true, force: true });
+  await stopChild(browser);
+  await stopChild(localServer);
+  await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }

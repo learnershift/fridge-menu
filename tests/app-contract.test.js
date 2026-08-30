@@ -698,6 +698,9 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.equal(pkg.scripts["store-assets"], "node scripts/generate-store-assets.mjs");
   assert.equal(pkg.scripts["store-screenshot"], "node scripts/capture-store-assets.mjs");
   assert.equal(pkg.scripts["test:browser"], "node scripts/capture-store-assets.mjs --verify-dom-only");
+  assert.match(capture, /async function stopChild\(child\)/);
+  assert.match(capture, /await stopChild\(browser\)/);
+  assert.match(capture, /await rm\(profile, \{ recursive: true, force: true, maxRetries: 5, retryDelay: 100 \}\)/);
   assert.ok(pkg.scripts["verify:release"].includes("npm test"));
   assert.ok(pkg.scripts["verify:release"].includes("npm run build"));
   assert.match(androidBuild, /compileSdk\s*=\s*36/);
