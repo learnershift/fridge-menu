@@ -35,6 +35,13 @@ const seededStateKo = {
   ],
   favorites: [], history: [],
 };
+// Phones emulate a touch device; tablet passes keep mobile emulation off so the
+// layout viewport matches the CSS width the responsive breakpoints target.
+const devicePasses = [
+  { suffix: "1080x1920", width: 360, height: 640, deviceScaleFactor: 3, mobile: true },
+  { suffix: "1200x1920", width: 600, height: 960, deviceScaleFactor: 2, mobile: false },
+  { suffix: "1600x2560", width: 800, height: 1280, deviceScaleFactor: 2, mobile: false },
+];
 const localePasses = [
   { locale: "en", browserLocale: "en-US", filePrefix: "", state: seededState },
   { locale: "ko", browserLocale: "ko-KR", filePrefix: "ko-", state: seededStateKo },
@@ -246,12 +253,14 @@ try {
       };
     }
   ` });
-  await protocol.call("Emulation.setDeviceMetricsOverride", { width: 360, height: 640, deviceScaleFactor: 3, mobile: true });
+  await protocol.call("Emulation.setDeviceMetricsOverride", { width: devicePasses[0].width, height: devicePasses[0].height, deviceScaleFactor: devicePasses[0].deviceScaleFactor, mobile: true });
   let loaded = protocol.event("Page.loadEventFired");
   await protocol.call("Page.navigate", { url });
   await loaded;
 
-  for (const pass of localePasses) {
+  for (const device of verifyDomOnly ? devicePasses.slice(0, 1) : devicePasses) {
+   await protocol.call("Emulation.setDeviceMetricsOverride", { width: device.width, height: device.height, deviceScaleFactor: device.deviceScaleFactor, mobile: device.mobile });
+   for (const pass of localePasses) {
     await protocol.call("Emulation.setLocaleOverride", { locale: pass.browserLocale });
     if (verifyDomOnly) {
       loaded = protocol.event("Page.loadEventFired");
@@ -273,11 +282,12 @@ try {
       await evaluate(protocol, "document.fonts.ready", { awaitPromise: true });
       await evaluate(protocol, "new Promise(resolve => setTimeout(resolve, 300))", { awaitPromise: true });
       const screenshot = await protocol.call("Page.captureScreenshot", { format: "png", fromSurface: true, captureBeyondViewport: false });
-      const output = resolve(outputDir, `fridge-menu-${pass.filePrefix}${captures[index].name}-1080x1920.png`);
+      const output = resolve(outputDir, `fridge-menu-${pass.filePrefix}${captures[index].name}-${device.suffix}.png`);
       await writeFile(output, Buffer.from(screenshot.data, "base64"));
       await access(output);
       console.log(`STORE_CAPTURE_OK path=${output}`);
     }
+   }
   }
 } finally {
   if (socket) socket.close();

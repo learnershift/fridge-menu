@@ -383,7 +383,10 @@ test("responsive and reduced-motion rules are present", async () => {
   assert.match(css, /:focus-visible/);
   assert.match(css, /\.urgency-dot--expired/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.urgency-label \{ display: inline; grid-column: 2; \}/);
-  assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.meal-card \{ grid-template-columns: 1fr; \}/);
+  // The meal card renders a single content wrapper, so it must be one column at every
+  // width. A leading fixed column squeezed the whole card into 40px above 620px.
+  assert.match(css, /\.meal-card \{ display: grid; grid-template-columns: minmax\(0, 1fr\);/);
+  assert.doesNotMatch(css, /\.meal-card \{[^}]*grid-template-columns: 2\.5rem/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.ingredient-item \{ grid-template-columns: auto minmax\(0, 1fr\) auto; \}/);
 });
 
