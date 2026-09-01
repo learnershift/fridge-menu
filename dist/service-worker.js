@@ -1,4 +1,4 @@
-const CACHE_NAME = "fridge-menu-shell-225de2852dd304f7";
+const CACHE_NAME = "fridge-menu-shell-5c0b9cfc980acb6c";
 const APP_SHELL = Object.freeze([
   "./",
   "./index.html",

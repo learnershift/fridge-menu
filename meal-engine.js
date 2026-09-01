@@ -976,22 +976,22 @@ export function generateSuggestions(records, today = localToday(), locale = "en"
   const ordered = sortUseFirst(records, today);
   const profile = buildProfile(ordered);
   const offset = Number.isInteger(options?.offset) && options.offset > 0 ? options.offset : 0;
+  const seenTitles = new Set();
   const chosen = MEAL_TEMPLATES
     .filter((template) => template.eligible(profile))
     .map((template) => ({ template, score: template.score(profile) }))
     .sort((a, b) => b.score - a.score || a.template.order - b.template.order)
+    .map(({ template }) => ({ template, text: template.text(profile, resolvedLocale) }))
+    .filter(({ text }) => !seenTitles.has(text.title) && seenTitles.add(text.title))
     .slice(offset, offset + 3);
-  return chosen.map(({ template }, index) => {
-    const { title, method } = template.text(profile, resolvedLocale);
-    return {
-      id: `suggestion-${offset + index + 1}`,
-      title,
-      anchor: profile.anchor.name,
-      ingredients: profile.names,
-      useFirstReason: useFirstReason(resolvedLocale, profile.anchor),
-      method,
-      minutes: template.minutes,
-      difficulty: template.difficulty,
-    };
-  });
+  return chosen.map(({ template, text }, index) => ({
+    id: `suggestion-${offset + index + 1}`,
+    title: text.title,
+    anchor: profile.anchor.name,
+    ingredients: profile.names,
+    useFirstReason: useFirstReason(resolvedLocale, profile.anchor),
+    method: text.method,
+    minutes: template.minutes,
+    difficulty: template.difficulty,
+  }));
 }

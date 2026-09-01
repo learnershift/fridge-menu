@@ -240,3 +240,29 @@ test("the expanded template pool widens the reachable menu variety", () => {
   }
   assert.ok(titles.size >= 95, `the ten-template pool reached 70 distinct titles here; expected at least 95, got ${titles.size}`);
 });
+
+test("alternative menus never repeat the primary titles", () => {
+  for (const names of VARIETY_COMBOS) {
+    const records = comboRecords(names);
+    for (const locale of ["en", "ko"]) {
+      const primary = generateSuggestions(records, "2026-08-01", locale).map((item) => item.title);
+      const alternatives = generateSuggestions(records, "2026-08-01", locale, { offset: 3 }).map((item) => item.title);
+      assert.equal(new Set([...primary, ...alternatives]).size, primary.length + alternatives.length,
+        `primary and alternative titles must all differ: ${names.join(", ")} (${locale})`);
+    }
+  }
+});
+
+test("the store capture scenario keeps alternatives distinct from the primary menus", () => {
+  const scenarios = [["ko", ["계란", "밥", "시금치"]], ["en", ["Egg", "Rice", "Spinach"]]];
+  for (const [locale, names] of scenarios) {
+    const records = names.map((name, sequence) => ({ id: `quick-${sequence}`, name, urgency: "stable", sequence }));
+    const primary = generateSuggestions(records, undefined, locale).map((item) => item.title);
+    const alternatives = generateSuggestions(records, undefined, locale, { offset: 3 }).map((item) => item.title);
+    assert.equal(primary.length, 3, `three primary menus expected (${locale})`);
+    assert.equal(alternatives.length, 3, `three alternative menus expected (${locale})`);
+    for (const title of alternatives) {
+      assert.ok(!primary.includes(title), `alternative menu repeats a primary title: ${title} (${locale})`);
+    }
+  }
+});
