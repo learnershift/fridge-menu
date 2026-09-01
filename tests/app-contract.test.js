@@ -612,7 +612,7 @@ test("package has no dependency or install surface", async () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
-  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "ci:receipt", "release:manifest", "start", "store-assets", "store-screenshot", "test", "test:browser", "verify:aab-repro", "verify:release"]);
+  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "ci:receipt", "release:manifest", "start", "store-assets", "store-screenshot", "test", "test:browser", "verify:aab-repro", "verify:policy-url", "verify:release"]);
 });
 
 test("verify:release builds the AAB before manifest and Android evidence", async () => {
