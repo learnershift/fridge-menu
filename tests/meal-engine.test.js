@@ -178,3 +178,65 @@ test("date-backed suggestions are deterministic and mention no unavailable food"
     assert.doesNotMatch(`${suggestion.title} ${suggestion.method}`, /grain|dressing|seasoning|oil|salt/i);
   }
 });
+
+const VARIETY_COMBOS = Object.freeze([
+  ["Rice", "Egg", "Spinach"], ["Rice", "Kimchi", "Pork"], ["Noodles", "Mushrooms", "Scallion"],
+  ["Noodles", "Chicken", "Cabbage"], ["Bread", "Cheese", "Tomatoes"], ["Bread", "Egg", "Milk"],
+  ["Tofu", "Zucchini", "Carrot"], ["Beans", "Corn", "Tomatoes"], ["Kimchi", "Tofu", "Onion"],
+  ["Rice", "Mushrooms", "Carrot"], ["Egg", "Cheese", "Spinach"], ["Chicken", "Beef", "Onion"],
+  ["Bread", "Lettuce", "Ham"], ["Noodles", "Kimchi", "Egg"], ["Potato", "Onion", "Carrot", "Cabbage"],
+  ["Rice", "Tuna", "Cucumber"], ["Milk", "Broccoli", "Cheese"], ["Squid", "Pepper", "Onion"],
+  ["Mystery jar", "Leftover box", "Frozen block"], ["Rice", "Noodles", "Egg", "Kimchi", "Tofu"],
+]);
+
+function comboRecords(names) {
+  return names.map((name, index) => ({ id: String(index), name, urgency: index === 0 ? "use-now" : "stable", sequence: index }));
+}
+
+test("the template pool stays deterministic across many ingredient combinations", () => {
+  for (const names of VARIETY_COMBOS) {
+    const records = comboRecords(names);
+    for (const offset of [0, 3]) {
+      const suggestions = generateSuggestions(records, "2026-08-01", "en", { offset });
+      assert.deepEqual(suggestions, generateSuggestions(structuredClone(records), "2026-08-01", "en", { offset }),
+        `same ingredients must produce the same menus: ${names.join(", ")} offset=${offset}`);
+    }
+  }
+});
+
+test("every generated menu keeps the ingredient and vocabulary boundary", () => {
+  for (const names of VARIETY_COMBOS) {
+    const records = comboRecords(names);
+    for (const locale of ["en", "ko"]) {
+      for (const offset of [0, 3]) {
+        for (const suggestion of generateSuggestions(records, "2026-08-01", locale, { offset })) {
+          assert.doesNotMatch(`${suggestion.title} ${suggestion.method}`, /grain|dressing|seasoning|oil|salt/i,
+            `menu text must stay inside the generic kitchen vocabulary: ${suggestion.title}`);
+          assert.ok(suggestion.minutes >= 10 && suggestion.minutes <= 30);
+          assert.ok(["easy", "normal"].includes(suggestion.difficulty));
+          assert.deepEqual(suggestion.ingredients, names);
+        }
+      }
+    }
+  }
+});
+
+test("the first three menus stay distinct for every combination", () => {
+  for (const names of VARIETY_COMBOS) {
+    const suggestions = generateSuggestions(comboRecords(names), "2026-08-01", "en");
+    assert.equal(suggestions.length, 3, `three menus expected for ${names.join(", ")}`);
+    assert.equal(new Set(suggestions.map((item) => item.title)).size, 3, `distinct titles expected for ${names.join(", ")}`);
+    assert.equal(new Set(suggestions.map((item) => item.method)).size, 3, `distinct methods expected for ${names.join(", ")}`);
+  }
+});
+
+test("the expanded template pool widens the reachable menu variety", () => {
+  const titles = new Set();
+  for (const names of VARIETY_COMBOS) {
+    const records = comboRecords(names);
+    for (const offset of [0, 3]) {
+      for (const suggestion of generateSuggestions(records, "2026-08-01", "en", { offset })) titles.add(suggestion.title);
+    }
+  }
+  assert.ok(titles.size >= 95, `the ten-template pool reached 70 distinct titles here; expected at least 95, got ${titles.size}`);
+});

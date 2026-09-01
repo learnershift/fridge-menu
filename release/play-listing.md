@@ -14,6 +14,8 @@ Full description:
 
 Fridge Menu turns the ingredients already in your fridge into three practical meal directions that actually match what you have — a fried rice when you have rice and eggs, a stew when kimchi is waiting, a fresh salad when vegetables pile up. Add three to eight ingredients (expiry dates optional), and the most urgent ingredient always leads.
 
+The direction pool covers everyday home cooking — pan dishes, stews and hot pots, rice bowls and porridge, noodle bowls hot and chilled, rolled and steamed eggs, sandwiches and wraps, pancakes and steamed vegetables — so a different fridge gives you a different answer, and you can page past the first three for more.
+
 Available in English and Korean, with Korean ingredient names understood out of the box.
 
 Your pantry stays on your device. Fridge Menu has no account, analytics, tracking, advertising SDK, or remote API. It works offline after installation and never asks you to share your ingredients.
@@ -31,6 +33,8 @@ Meal directions are flexible cooking prompts, not recipes, nutrition advice, all
 자세한 설명:
 
 냉장고 메뉴는 지금 냉장고에 있는 재료로 만들 수 있는 현실적인 메뉴 3가지를 제안해요. 밥과 계란이 있으면 볶음밥, 김치가 있으면 찌개, 채소가 쌓였으면 샐러드 — 재료에 따라 메뉴가 달라져요. 재료를 3~8개 담으면(유통기한 입력은 선택) 가장 급한 재료부터 쓰는 순서로 알려 드려요.
+
+볶음과 조림, 찌개와 전골, 덮밥과 죽, 따뜻한 면과 찬 면, 계란말이와 계란찜, 샌드위치와 롤, 부침과 찜까지 집밥에서 자주 만드는 방향을 폭넓게 담았어요. 재료가 달라지면 결과도 달라지고, 처음 3가지 말고 다음 메뉴도 넘겨 볼 수 있어요.
 
 한국어와 영어를 지원하고, 한국어 재료 이름을 그대로 알아들어요.
 

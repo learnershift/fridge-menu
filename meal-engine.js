@@ -171,6 +171,7 @@ function koParticle(word, withFinalConsonant, withoutFinalConsonant) {
 }
 
 const koObject = (word) => `${word}${koParticle(word, "을", "를")}`;
+const koWith = (word) => `${word}${koParticle(word, "과", "와")}`;
 
 function listNames(names) {
   return names.join(", ");
@@ -442,6 +443,527 @@ const MEAL_TEMPLATES = Object.freeze([
       return {
         title: `${anchor} layered warm bowl`,
         method: `Warm ${anchor} first${finish} so the most urgent ingredients get eaten first.`,
+      };
+    },
+  },
+  {
+    id: "kimchi-fried-rice",
+    order: 10,
+    minutes: 20,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.rice) && Boolean(profile.kimchi),
+    score: () => 19,
+    text(profile, locale) {
+      const kimchi = profile.kimchi.name;
+      const rice = profile.rice.name;
+      const rest = without(profile.names, [kimchi, rice]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 마지막에 넣어 한 번 더 볶아 주세요.` : "";
+        return {
+          title: `${kimchi} 볶음밥`,
+          method: `팬에 ${koObject(kimchi)} 먼저 볶아 숨을 죽이고, ${koObject(rice)} 넣어 눌러가며 볶아 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, then fold in ${listNames(rest)} at the end` : "";
+      return {
+        title: `${kimchi} pan fried rice`,
+        method: `Cook ${kimchi} in a hot pan until it softens, press in ${rice}, and keep turning it${finish}.`,
+      };
+    },
+  },
+  {
+    id: "kimchi-braise",
+    order: 11,
+    minutes: 30,
+    difficulty: "normal",
+    eligible: (profile) => Boolean(profile.kimchi) && profile.proteins.length > 0,
+    score: () => 18,
+    text(profile, locale) {
+      const kimchi = profile.kimchi.name;
+      const protein = profile.proteins[0].name;
+      const rest = without(profile.names, [kimchi, protein]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 위에 얹어 함께 익혀 주세요.` : "";
+        return {
+          title: `${kimchi} ${protein} 조림`,
+          method: `냄비에 ${koObject(kimchi)} 깔고 ${koObject(protein)} 올린 뒤, 물을 자작하게 부어 약한 불에서 푹 익혀 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, laying ${listNames(rest)} on top partway through` : "";
+      return {
+        title: `braised ${kimchi} with ${protein}`,
+        method: `Line a pot with ${kimchi}, set ${protein} on top, add enough water to reach halfway, and simmer gently${finish}.`,
+      };
+    },
+  },
+  {
+    id: "noodle-stir-fry",
+    order: 12,
+    minutes: 20,
+    difficulty: "normal",
+    eligible: (profile) => Boolean(profile.noodle) && profile.proteins.length > 0,
+    score: () => 17,
+    text(profile, locale) {
+      const noodle = profile.noodle.name;
+      const protein = profile.proteins[0].name;
+      const rest = without(profile.names, [noodle, protein]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 함께 넣어 주세요.` : "";
+        return {
+          title: `${protein} ${noodle} 볶음`,
+          method: `${koObject(noodle)} 미리 삶아 건져두고, 팬에 ${koObject(protein)} 익힌 뒤 삶은 면을 넣어 센 불에서 빠르게 볶아 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, adding ${listNames(rest)} as you go` : "";
+      return {
+        title: `stir-fried ${noodle} with ${protein}`,
+        method: `Cook ${noodle} ahead and drain it, sear ${protein} in a hot pan, then toss the ${noodle} through over high heat${finish}.`,
+      };
+    },
+  },
+  {
+    id: "egg-rice-bowl",
+    order: 13,
+    minutes: 15,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.rice) && Boolean(profile.egg),
+    score: () => 16,
+    text(profile, locale) {
+      const egg = profile.egg.name;
+      const rice = profile.rice.name;
+      const rest = without(profile.names, [egg, rice]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 곁들여 비벼 드세요.` : "";
+        return {
+          title: `${egg} 덮밥`,
+          method: `${koObject(rice)} 그릇에 담고, ${koObject(egg)} 반숙으로 익혀 위에 올려 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, with ${listNames(rest)} tucked around the edge` : "";
+      return {
+        title: `${egg} rice bowl`,
+        method: `Spoon ${rice} into a bowl and set a softly cooked ${egg} on top${finish}.`,
+      };
+    },
+  },
+  {
+    id: "noodle-soup",
+    order: 14,
+    minutes: 25,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.noodle) && (profile.vegetables.length > 0 || profile.proteins.length > 0),
+    score: () => 16,
+    text(profile, locale) {
+      const noodle = profile.noodle.name;
+      const partner = (profile.vegetables[0] ?? profile.proteins[0]).name;
+      const rest = without(profile.names, [noodle, partner]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 급한 순서대로 넣어 주세요.` : "";
+        return {
+          title: `${partner} ${noodle} 국물요리`,
+          method: `냄비에 물을 넉넉히 잡아 ${koObject(partner)} 먼저 우려내고, ${koObject(noodle)} 넣어 익혀 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, then add ${listNames(rest)} in use-first order` : "";
+      return {
+        title: `${noodle} soup with ${partner}`,
+        method: `Simmer ${partner} in a pot of water to build the broth, then slip in ${noodle} until tender${finish}.`,
+      };
+    },
+  },
+  {
+    id: "bread-sandwich",
+    order: 15,
+    minutes: 10,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.bread) && profile.proteins.length > 0,
+    score: () => 15,
+    text(profile, locale) {
+      const bread = profile.bread.name;
+      const protein = profile.proteins[0].name;
+      const rest = without(profile.names, [bread, protein]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 사이에 층층이 끼워 주세요.` : "";
+        return {
+          title: `${protein} 샌드위치`,
+          method: `${koObject(bread)} 노릇하게 구워 식히고, ${koObject(protein)} 익혀 사이에 넣어 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, stacking ${listNames(rest)} between the layers` : "";
+      return {
+        title: `${protein} sandwich`,
+        method: `Warm ${bread} until it crisps, cook ${protein}, and press them together${finish}.`,
+      };
+    },
+  },
+  {
+    id: "egg-bread",
+    order: 16,
+    minutes: 15,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.bread) && Boolean(profile.egg),
+    score: () => 15,
+    text(profile, locale) {
+      const bread = profile.bread.name;
+      const egg = profile.egg.name;
+      const rest = without(profile.names, [bread, egg]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 곁들이면 한 끼가 돼요.` : "";
+        return {
+          title: `${egg}물 입힌 ${bread}`,
+          method: `${koObject(egg)} 풀어 ${koObject(bread)} 앞뒤로 적신 뒤, 약한 불 팬에서 천천히 구워 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `; serve ${listNames(rest)} on the side` : "";
+      return {
+        title: `${egg}-dipped ${bread}`,
+        method: `Beat ${egg}, soak both sides of ${bread} in it, and cook slowly in a low pan until set${finish}.`,
+      };
+    },
+  },
+  {
+    id: "chilled-noodle",
+    order: 17,
+    minutes: 15,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.noodle) && profile.vegetables.length >= 2,
+    score: () => 15,
+    text(profile, locale) {
+      const noodle = profile.noodle.name;
+      const vegetableNames = profile.vegetables.map((item) => item.name);
+      const rest = without(profile.names, [noodle, ...vegetableNames]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 따로 익혀 올려 주세요.` : "";
+        return {
+          title: `${vegetableNames[0]} 얹은 찬 ${noodle}`,
+          method: `${koObject(noodle)} 삶아 찬물에 헹궈 물기를 빼고, ${koObject(listNames(vegetableNames))} 채 썰어 위에 소복이 올려 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, with ${listNames(rest)} cooked separately on top` : "";
+      return {
+        title: `chilled ${noodle} with ${vegetableNames[0]}`,
+        method: `Cook ${noodle}, rinse it under cold water, drain well, and pile shredded ${listNames(vegetableNames)} over it${finish}.`,
+      };
+    },
+  },
+  {
+    id: "protein-vegetable-stew",
+    order: 18,
+    minutes: 30,
+    difficulty: "normal",
+    eligible: (profile) => profile.proteins.length > 0 && profile.vegetables.length >= 2,
+    score: () => 15,
+    text(profile, locale) {
+      const protein = profile.proteins[0].name;
+      const vegetableNames = profile.vegetables.map((item) => item.name);
+      const rest = without(profile.names, [protein, ...vegetableNames]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 마지막에 넣어 주세요.` : "";
+        return {
+          title: `${protein} ${vegetableNames[0]} 전골`,
+          method: `냄비에 ${koObject(listNames(vegetableNames))} 돌려 담고 가운데 ${koObject(protein)} 올린 뒤, 물을 부어 끓여 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, adding ${listNames(rest)} at the end` : "";
+      return {
+        title: `${protein} and ${vegetableNames[0]} hot pot`,
+        method: `Arrange ${listNames(vegetableNames)} around a pot, set ${protein} in the middle, pour in water, and simmer until everything is tender${finish}.`,
+      };
+    },
+  },
+  {
+    id: "rice-porridge",
+    order: 19,
+    minutes: 30,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.rice) && profile.vegetables.length > 0,
+    score: () => 14,
+    text(profile, locale) {
+      const rice = profile.rice.name;
+      const vegetable = profile.vegetables[0].name;
+      const rest = without(profile.names, [rice, vegetable]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 잘게 썰어 함께 끓여 주세요.` : "";
+        return {
+          title: `${vegetable} ${rice}죽`,
+          method: `${rice}에 물을 넉넉히 붓고 약한 불에서 저어가며 퍼질 때까지 끓이고, ${koObject(vegetable)} 잘게 썰어 넣어 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, stirring in finely chopped ${listNames(rest)}` : "";
+      return {
+        title: `${vegetable} ${rice} porridge`,
+        method: `Simmer ${rice} in plenty of water over low heat, stirring until it breaks down, then add chopped ${vegetable}${finish}.`,
+      };
+    },
+  },
+  {
+    id: "rolled-egg",
+    order: 20,
+    minutes: 15,
+    difficulty: "normal",
+    eligible: (profile) => Boolean(profile.egg) && profile.vegetables.length >= 2,
+    score: () => 14,
+    text(profile, locale) {
+      const egg = profile.egg.name;
+      const vegetableNames = profile.vegetables.map((item) => item.name);
+      const rest = without(profile.names, [egg, ...vegetableNames]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 곁들여 드세요.` : "";
+        return {
+          title: `${vegetableNames[0]} ${egg}말이`,
+          method: `${koObject(egg)} 곱게 풀고 ${koObject(listNames(vegetableNames))} 잘게 다져 섞은 뒤, 약한 불 팬에 얇게 부어 한쪽부터 말아 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `; serve ${listNames(rest)} alongside` : "";
+      return {
+        title: `rolled ${egg} with ${vegetableNames[0]}`,
+        method: `Beat ${egg} smooth, mix in finely diced ${listNames(vegetableNames)}, pour a thin layer into a low pan, and roll it from one side${finish}.`,
+      };
+    },
+  },
+  {
+    id: "braised-proteins",
+    order: 21,
+    minutes: 30,
+    difficulty: "normal",
+    eligible: (profile) => profile.proteins.length >= 2,
+    score: () => 14,
+    text(profile, locale) {
+      const first = profile.proteins[0].name;
+      const second = profile.proteins[1].name;
+      const rest = without(profile.names, [first, second]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 나중에 넣어 함께 조려 주세요.` : "";
+        return {
+          title: `${first} ${second} 두 가지 조림`,
+          method: `${koObject(first)} 먼저 냄비에 넣고 물을 자작하게 부어 끓이다가, ${koObject(second)} 넣어 국물이 줄 때까지 조려 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, adding ${listNames(rest)} later` : "";
+      return {
+        title: `${first} and ${second} braise`,
+        method: `Start ${first} in a pot with just enough water, add ${second}, and cook down until the liquid thickens${finish}.`,
+      };
+    },
+  },
+  {
+    id: "melted-toast",
+    order: 22,
+    minutes: 10,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.bread) && profile.dairy.length > 0,
+    score: () => 14,
+    text(profile, locale) {
+      const bread = profile.bread.name;
+      const dairy = profile.dairy[0].name;
+      const rest = without(profile.names, [bread, dairy]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 위에 올려 함께 구워 주세요.` : "";
+        return {
+          title: `${dairy} 올린 ${bread}`,
+          method: `${koObject(bread)} 팬에 올리고 ${koObject(dairy)} 얹어 뚜껑을 덮은 채 약한 불에서 녹여 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, layering ${listNames(rest)} on top before it melts` : "";
+      return {
+        title: `${dairy} melt on ${bread}`,
+        method: `Set ${bread} in a pan, cover it with ${dairy}, put a lid on, and heat gently until it melts${finish}.`,
+      };
+    },
+  },
+  {
+    id: "rice-vegetable-soup",
+    order: 23,
+    minutes: 25,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.rice) && profile.vegetables.length >= 2,
+    score: () => 13,
+    text(profile, locale) {
+      const rice = profile.rice.name;
+      const vegetableNames = profile.vegetables.map((item) => item.name);
+      const rest = without(profile.names, [rice, ...vegetableNames]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 함께 넣어 주세요.` : "";
+        return {
+          title: `${vegetableNames[0]} 넣은 ${rice}국`,
+          method: `냄비에 물을 붓고 ${koObject(listNames(vegetableNames))} 먼저 끓여 맛을 낸 다음, ${koObject(rice)} 넣어 한소끔 더 끓여 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, along with ${listNames(rest)}` : "";
+      return {
+        title: `${vegetableNames[0]} and ${rice} soup`,
+        method: `Simmer ${listNames(vegetableNames)} in a pot of water until the broth tastes full, then stir in ${rice} and heat through${finish}.`,
+      };
+    },
+  },
+  {
+    id: "steamed-egg",
+    order: 24,
+    minutes: 20,
+    difficulty: "normal",
+    eligible: (profile) => Boolean(profile.egg) && (profile.proteins.length >= 2 || profile.dairy.length > 0),
+    score: () => 13,
+    text(profile, locale) {
+      const egg = profile.egg.name;
+      const rest = without(profile.names, [egg]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 잘게 썰어 섞어 주세요.` : "";
+        return {
+          title: `부드러운 ${egg}찜`,
+          method: `${koObject(egg)} 풀어 물을 조금 섞고, 그릇째 냄비에 앉혀 뚜껑을 덮은 뒤 약한 불에서 몽글하게 익혀 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, folding in finely chopped ${listNames(rest)}` : "";
+      return {
+        title: `soft steamed ${egg}`,
+        method: `Whisk ${egg} with a little water, set the bowl in a covered pot, and steam over low heat until just set${finish}.`,
+      };
+    },
+  },
+  {
+    id: "baked-vegetables",
+    order: 25,
+    minutes: 30,
+    difficulty: "normal",
+    eligible: (profile) => profile.dairy.length > 0 && profile.vegetables.length > 0,
+    score: () => 13,
+    text(profile, locale) {
+      const dairy = profile.dairy[0].name;
+      const vegetable = profile.vegetables[0].name;
+      const rest = without(profile.names, [dairy, vegetable]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 사이사이에 끼워 주세요.` : "";
+        return {
+          title: `${dairy} 얹은 ${vegetable} 구이`,
+          method: `${koObject(vegetable)} 도톰하게 썰어 팬에 깔고 ${koObject(dairy)} 덮은 뒤, 뚜껑을 덮고 약한 불에서 녹을 때까지 익혀 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, tucking ${listNames(rest)} in between` : "";
+      return {
+        title: `${vegetable} baked under ${dairy}`,
+        method: `Slice ${vegetable} thick, spread it in a pan, blanket it with ${dairy}, cover, and cook on low until melted through${finish}.`,
+      };
+    },
+  },
+  {
+    id: "vegetable-wrap",
+    order: 26,
+    minutes: 10,
+    difficulty: "easy",
+    eligible: (profile) => Boolean(profile.bread) && profile.vegetables.length > 0,
+    score: () => 13,
+    text(profile, locale) {
+      const bread = profile.bread.name;
+      const vegetableNames = profile.vegetables.map((item) => item.name);
+      const rest = without(profile.names, [bread, ...vegetableNames]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 함께 넣어 말아 주세요.` : "";
+        return {
+          title: `${vegetableNames[0]} ${bread} 롤`,
+          method: `${koObject(bread)} 살짝 데워 부드럽게 만들고, ${koObject(listNames(vegetableNames))} 길게 썰어 한쪽 끝에 올린 뒤 단단히 말아 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, rolling ${listNames(rest)} in with them` : "";
+      return {
+        title: `${vegetableNames[0]} ${bread} wrap`,
+        method: `Warm ${bread} until it bends easily, lay strips of ${listNames(vegetableNames)} along one edge, and roll it up tightly${finish}.`,
+      };
+    },
+  },
+  {
+    id: "kimchi-pancake",
+    order: 27,
+    minutes: 20,
+    difficulty: "normal",
+    eligible: (profile) => Boolean(profile.kimchi) && profile.vegetables.length >= 2,
+    score: () => 13,
+    text(profile, locale) {
+      const kimchi = profile.kimchi.name;
+      const partner = profile.vegetables.find((item) => item.name !== kimchi)?.name ?? profile.anchor.name;
+      const rest = without(profile.names, [kimchi, partner]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 잘게 썰어 반죽에 섞어 주세요.` : "";
+        return {
+          title: `${kimchi} ${partner} 부침`,
+          method: `${koObject(kimchi)} 잘게 썰어 ${koWith(partner)} 함께 섞고, 팬에 얇게 펴 앞뒤로 노릇하게 부쳐 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, mixing chopped ${listNames(rest)} into the batter` : "";
+      return {
+        title: `${kimchi} and ${partner} pan cake`,
+        method: `Chop ${kimchi} small, combine it with ${partner}, spread the mixture thin in a pan, and cook both sides until browned${finish}.`,
+      };
+    },
+  },
+  {
+    id: "vegetable-pancake",
+    order: 28,
+    minutes: 20,
+    difficulty: "normal",
+    eligible: (profile) => profile.vegetables.length >= 3,
+    score: () => 12,
+    text(profile, locale) {
+      const vegetableNames = profile.vegetables.map((item) => item.name);
+      const rest = without(profile.names, vegetableNames);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 곁들여 드세요.` : "";
+        return {
+          title: `${vegetableNames[0]} ${vegetableNames[1]} 모둠 전`,
+          method: `${koObject(listNames(vegetableNames))} 가늘게 채 썰어 한데 섞고, 팬에 넓게 펴 눌러가며 앞뒤로 부쳐 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `; serve ${listNames(rest)} on the side` : "";
+      return {
+        title: `${vegetableNames[0]} & ${vegetableNames[1]} mixed pan cake`,
+        method: `Shred ${listNames(vegetableNames)} finely, mix them together, spread wide in a pan, and press while cooking both sides${finish}.`,
+      };
+    },
+  },
+  {
+    id: "steamed-vegetables",
+    order: 29,
+    minutes: 15,
+    difficulty: "easy",
+    eligible: (profile) => profile.vegetables.length >= 2,
+    score: () => 11,
+    text(profile, locale) {
+      const vegetableNames = profile.vegetables.map((item) => item.name);
+      const rest = without(profile.names, vegetableNames);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 따로 데워 함께 담아 주세요.` : "";
+        return {
+          title: `${vegetableNames[0]} ${vegetableNames[1]} 찜`,
+          method: `냄비에 물을 조금만 붓고 ${koObject(listNames(vegetableNames))} 큼직하게 썰어 넣은 뒤, 뚜껑을 덮고 김이 오르면 숨이 죽을 때까지 쪄 주세요.${finish}`,
+        };
+      }
+      const finish = rest.length ? `, warming ${listNames(rest)} separately to serve with them` : "";
+      return {
+        title: `steamed ${vegetableNames[0]} & ${vegetableNames[1]}`,
+        method: `Put a shallow layer of water in a pot, add ${listNames(vegetableNames)} in large pieces, cover, and steam until they soften${finish}.`,
+      };
+    },
+  },
+  {
+    id: "simple-plate",
+    order: 30,
+    minutes: 10,
+    difficulty: "easy",
+    eligible: () => true,
+    score: () => 9,
+    text(profile, locale) {
+      const anchor = profile.anchor.name;
+      const rest = without(profile.names, [anchor]);
+      if (locale === "ko") {
+        const finish = rest.length ? ` ${koObject(listNames(rest))} 곁들여 한 접시에 담아 주세요.` : "";
+        return {
+          title: `${anchor} 한 접시`,
+          method: `${koObject(anchor)} 먹기 좋게 손질해 가장 잘 익는 방법으로 데워 주세요.${finish} 급한 재료를 먼저 비우는 구성이에요.`,
+        };
+      }
+      const finish = rest.length ? `, then arrange ${listNames(rest)} beside it on one plate` : "";
+      return {
+        title: `${anchor} simple plate`,
+        method: `Trim ${anchor} into easy pieces and warm it whichever way suits it best${finish}, clearing the most urgent ingredient first.`,
       };
     },
   },
