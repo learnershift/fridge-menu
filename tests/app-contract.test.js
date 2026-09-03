@@ -839,7 +839,7 @@ test("GitHub Pages publication is manual-only and deploys only the freshly built
   assert.match(workflow, /id-token:\s*write/);
 });
 
-test("Android release shell has a launcher icon and remains offline with no permissions", async () => {
+test("Android release shell has a launcher icon, a virtual asset origin, and no permissions", async () => {
   const manifest = await read("android/app/src/main/AndroidManifest.xml");
   const activity = await read("android/app/src/main/java/com/learnershift/fridgemenu/MainActivity.java");
   const icon = await read("android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml");
@@ -847,8 +847,13 @@ test("Android release shell has a launcher icon and remains offline with no perm
   assert.match(manifest, /android:icon="@mipmap\/ic_launcher"/);
   assert.match(manifest, /android:roundIcon="@mipmap\/ic_launcher_round"/);
   assert.doesNotMatch(manifest, /uses-permission/);
-  assert.match(activity, /file:\/\/\/android_asset\/pwa\/index\.html/);
-  assert.doesNotMatch(activity, /https?:\/\//i);
+  assert.match(activity, /APP_HOST = "appassets\.androidplatform\.net"/);
+  assert.match(activity, /APP_ORIGIN = "https:" \+ "\/\/" \+ APP_HOST/);
+  assert.match(activity, /APP_PATH = "\/assets\/pwa\/"/);
+  assert.match(activity, /APP_ENTRY = APP_ORIGIN \+ APP_PATH \+ "index\.html"/);
+  assert.match(activity, /\.addPathHandler\("\/assets\/", new WebViewAssetLoader\.AssetsPathHandler\(this\)\)/);
+  assert.doesNotMatch(activity, /file:\/\/\/android_asset/);
+  assert.match(activity, /String encodedPath = uri\.getEncodedPath\(\);\s*if \(encodedPath == null \|\| encodedPath\.indexOf\('%'\) >= 0\) return false;\s*String path = Uri\.decode\(encodedPath\);/);
   assert.match(icon, /<adaptive-icon/);
 });
 

@@ -13,12 +13,14 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.webkit.WebViewAssetLoader;
 import java.io.ByteArrayInputStream;
 
 public final class MainActivity extends Activity {
-  private static final String APP_ORIGIN = "file:///android_asset/pwa/";
-  private static final String APP_ENTRY = "file:///android_asset/pwa/index.html";
-  private static final String APP_PATH = "/android_asset/pwa/";
+  private static final String APP_HOST = "appassets.androidplatform.net";
+  private static final String APP_ORIGIN = "https:" + "//" + APP_HOST;
+  private static final String APP_PATH = "/assets/pwa/";
+  private static final String APP_ENTRY = APP_ORIGIN + APP_PATH + "index.html";
   private WebView webView;
   private OnBackInvokedCallback backCallback;
   private boolean backCallbackRegistered;
@@ -35,6 +37,9 @@ public final class MainActivity extends Activity {
     settings.setLoadWithOverviewMode(true);
     settings.setAllowFileAccessFromFileURLs(false);
     settings.setAllowUniversalAccessFromFileURLs(false);
+    WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
+        .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+        .build();
     webView.setWebViewClient(new WebViewClient() {
       @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
         return !isAllowedAppUrl(request.getUrl().toString());
@@ -45,11 +50,15 @@ public final class MainActivity extends Activity {
       }
 
       @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-        return isAllowedAppUrl(request.getUrl().toString()) ? null : emptyResponse();
+        return isAllowedAppUrl(request.getUrl().toString())
+            ? assetLoader.shouldInterceptRequest(request.getUrl())
+            : emptyResponse();
       }
 
       @Override @SuppressWarnings("deprecation") public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
-        return isAllowedAppUrl(url) ? null : emptyResponse();
+        return isAllowedAppUrl(url)
+            ? assetLoader.shouldInterceptRequest(Uri.parse(url))
+            : emptyResponse();
       }
 
       @Override public void onPageFinished(WebView view, String url) {
@@ -76,10 +85,11 @@ public final class MainActivity extends Activity {
   private static boolean isAllowedAppUrl(String rawUrl) {
     try {
       Uri uri = Uri.parse(rawUrl);
-      if (!"file".equals(uri.getScheme())) return false;
-      if (uri.getAuthority() != null && !uri.getAuthority().isEmpty()) return false;
-      String path = Uri.decode(uri.getEncodedPath());
-      if (path == null || !path.startsWith(APP_PATH) || path.indexOf('\\') >= 0 || path.indexOf('%') >= 0) return false;
+      if (!"https".equals(uri.getScheme()) || !APP_HOST.equals(uri.getAuthority())) return false;
+      String encodedPath = uri.getEncodedPath();
+      if (encodedPath == null || encodedPath.indexOf('%') >= 0) return false;
+      String path = Uri.decode(encodedPath);
+      if (!path.startsWith(APP_PATH) || path.indexOf('\\') >= 0 || path.indexOf('%') >= 0) return false;
       for (String segment : path.substring(APP_PATH.length()).split("/")) {
         if (".".equals(segment) || "..".equals(segment)) return false;
       }

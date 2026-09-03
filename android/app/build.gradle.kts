@@ -10,7 +10,7 @@ android {
     applicationId = "com.learnershift.fridgemenu"
     minSdk = 23
     targetSdk = 36
-    versionCode = 1
+    versionCode = 2
     versionName = "1.0.0"
   }
 
@@ -49,4 +49,8 @@ android {
       isMinifyEnabled = false
     }
   }
+}
+
+dependencies {
+  implementation("androidx.webkit:webkit:1.14.0")
 }
