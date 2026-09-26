@@ -14,7 +14,7 @@ const output = resolve(root, "release/artifacts/release-manifest.json");
 const aabPath = "android/app/build/outputs/bundle/release/app-release.aab";
 const expectedIdentity = Object.freeze({
   application_id: "com.learnershift.fridgemenu",
-  version_code: 1,
+  version_code: 2,
   version_name: "1.0.0",
   min_sdk: 23,
   target_sdk: 36,

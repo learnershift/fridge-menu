@@ -13,9 +13,11 @@ For every manual item, fill in: `Tester:`, `Device model:`, `Android version:`, 
 - [ ] Build twice from the same clean revision and confirm identical SHA-256 digests.
 - [ ] Confirm no signing key, production ad identifier, analytics, tracker, remote API, or Android network permission is present.
 - [ ] Run `npm run test:browser` against the fresh `dist` output and retain both English and Korean `STORE_UX_INTERACTION_OK` results.
+  - On the managed Linux server, `npm run test:browser:orca` provides an additional local DOM check using the ready Orca browser. It creates and closes its own loopback tab/server, runs the same English/Korean interactions, and checks saved state after reload. Its `ORCA_UX_INTERACTION_OK` results do not replace the standalone sandbox/mobile viewport check, screenshots, or Android candidate QA.
 - [ ] Confirm the Play upload icon is a 32-bit RGBA 512×512 PNG while PWA icons and the feature graphic retain their intended formats.
-- [ ] Treat a CI receipt as current only when execution is `GITHUB_ACTIONS`, the run URL is non-null, and its Git SHA and AAB SHA-256 match this exact candidate. CI verification is evidence, not approval authority.
+- [ ] Treat a CI receipt as current only when execution is `GITHUB_ACTIONS`, the run URL is non-null, and its Git SHA and AAB SHA-256 match the exact unsigned CI proof bundle. Preserve that bundle separately. CI verification is evidence, not approval authority.
 - [ ] Before Play upload, provide owner-controlled signing variables, rebuild, require `AAB_SIGNED_OK`, and record the signed AAB digest.
+- [ ] Bind the signed candidate to the same clean Git SHA/source tree, application identity, toolchain, and packaged PWA hashes as the unsigned CI proof; regenerate signed release-manifest/Android evidence. Record both AAB digests separately: signing changes bytes, so equality of signed and unsigned AAB digests is not required.
 
 ## 2. Physical device QA (owner/device required)
 

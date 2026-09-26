@@ -32,7 +32,7 @@ Re-confirm every answer against the exact signed candidate before saving it in P
 |---|---|---|
 | App access | All functionality is available without special access | No account, login, subscription, or restricted flow |
 | Ads declaration | No | Advertising UI and SDK are absent |
-| Data safety | No data collected or shared | Zero Android permissions, no INTERNET permission, no third-party dependencies, local WebView storage only |
+| Data safety | No data collected or shared | Zero Android permissions, no INTERNET permission, local WebView storage; AndroidX WebKit is included for bundled asset loading and must be inspected in the final AAB |
 | Data deletion | Clear list removes ingredients only; clear the app or browser storage, or uninstall, to remove ingredients, favorites, and history | No server copy exists |
 | Content rating | No violence, sexual content, gambling, drugs, or user-generated content | Deterministic local cooking directions only |
 | Target audience | Not directed to children | Product copy and privacy policy state this boundary |
@@ -64,11 +64,11 @@ Every receipt must contain: action, exact target (HTTPS URL or Play track), Git 
 
 GitHub Pages is a separate publication action. Before dispatching its workflow, protect the `github-pages` environment with the owner as required reviewer, set repository variable `OWNER_APPROVED_PAGES_SHA` to the exact approved `main` SHA, and enter that SHA plus the fresh publication approval evidence ID. Remove or change the variable after the action. Source-level guards do not replace the protected-environment approval.
 
-A CI receipt is usable only when its execution is `GITHUB_ACTIONS`, its run URL is non-null, and its Git SHA and AAB SHA-256 match the exact candidate. `LOCAL_SIMULATION_ONLY` is not current CI evidence, and a stale or mismatched receipt grants no approval or readiness credit.
+A CI receipt is usable only when its execution is `GITHUB_ACTIONS`, its run URL is non-null, and its Git SHA and AAB SHA-256 match the exact **unsigned CI proof bundle**. CI never receives signing keys. Preserve that bundle separately before building the signed candidate; signing changes the AAB digest, so do not require the signed digest to equal the unsigned CI digest. Bind the signed candidate separately to the same clean Git SHA/source tree, application identity, toolchain, and packaged PWA hashes, then regenerate its release-manifest and Android evidence and record its own signed AAB SHA-256. A mismatch in any of those shared inputs blocks promotion. `LOCAL_SIMULATION_ONLY` is not current CI evidence, and a stale or mismatched receipt grants no approval or readiness credit.
 
 ## Internal-test and release QA record
 
-Record the Git revision, release-manifest and AAB SHA-256, AAB signing status, CI run URL, Android/Gradle versions, tester list, opt-in URL, matching Google account confirmation, delivered version, device/OS, install and offline-relaunch results, feedback disposition, TalkBack result, screenshot identity, Health form access date and final Health answer, final questionnaire answers, target track, and country availability. Stop if any unexpected permission, SDK, analytics, identifier, account flow, external URL, unresolved declaration, or `OWNER_REQUIRED` marker appears.
+Record the Git revision, signed release-manifest and AAB SHA-256, AAB signing status, separate unsigned CI AAB SHA-256 and CI run URL, Android/Gradle versions, tester list, opt-in URL, matching Google account confirmation, delivered version, device/OS, install and offline-relaunch results, feedback disposition, TalkBack result, screenshot identity, Health form access date and final Health answer, final questionnaire answers, target track, and country availability. Stop if any unexpected permission, SDK, analytics, identifier, account flow, external URL, unresolved declaration, or `OWNER_REQUIRED` marker appears.
 
 ## Current boundary
 

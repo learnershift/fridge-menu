@@ -1,5 +1,7 @@
 # Play update handoff — version code 2
 
+> Historical Mac verification snapshot. The paths, Git SHA, and signed AAB digest below do not identify a current server artifact. See `LAUNCH-PLAN-2026-09-05.md` for the server audit and remaining work. Preserve this record as historical evidence, not current upload authority.
+
 ## Signed upload artifact
 
 - Path: `/Users/timeabout/projects/fridge-menu/android/app/build/outputs/bundle/release/app-release.aab`

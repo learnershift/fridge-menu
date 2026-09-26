@@ -2,6 +2,8 @@
 .hermes/
 node_modules/
 coverage/
+# Local handoff and audit records are indexed separately from the release source.
+reports/
 *.log
 .env
 .env.*

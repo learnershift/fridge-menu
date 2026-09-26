@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -52,11 +52,11 @@ test("clean-tree binding rejects tracked and untracked source changes", async ()
   }
 });
 
-test("release checks reject concatenated remote URLs and use narrow check names", () => {
+test("release checks reject concatenated remote URLs and use narrow check names", async () => {
   const fixture = {
     css: ".remove-button { min-width: 2.75rem; min-height: 2.75rem; }",
     androidManifest: "<manifest><application /></manifest>",
-    mainActivity: 'private static final String APP_ENTRY = "file:///android_asset/pwa/index.html"; view.loadUrl(APP_ENTRY);',
+    mainActivity: await readFile(new URL('../android/app/src/main/java/com/learnershift/fridgemenu/MainActivity.java', import.meta.url), 'utf8'),
     serviceWorker: 'const APP_SHELL = Object.freeze(["./index.html"]); cache.addAll(APP_SHELL);',
   };
   assert.deepEqual(computeStaticReleaseChecks(fixture), {
@@ -73,6 +73,22 @@ test("release checks reject concatenated remote URLs and use narrow check names"
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadDataWithBaseURL("dynamic", "", "text/html", "UTF-8", null);` }).privacy_security_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} Uri uri = new Uri.Builder().scheme("https").authority("evil.example").build();` }).privacy_security_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.getClass().getMethod("load" + "Url", String.class).invoke(view, "dynamic");` }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, androidManifest: "<manifest><uses-permission android:name=\"android.permission.INTERNET\" /></manifest>" }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: fixture.mainActivity.replace("appassets.androidplatform.net", "evil.example") }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: fixture.mainActivity.replace('"/assets/pwa/"', '"/assets/"') }).offline_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: fixture.mainActivity.replace(": emptyResponse()", ": null") }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: fixture.mainActivity.replace('!"https".equals(uri.getScheme())', '"https".equals(uri.getScheme())') }).privacy_security_static, "FAIL");
+  for (const [name, mainActivity] of [
+    ['early allow', fixture.mainActivity.replace('try {', 'try { if (rawUrl.length() >= 0) return true;')],
+    ['traversal bypass', fixture.mainActivity.replace('if (".".equals(segment) || "..".equals(segment))', 'if ((".".equals(segment) || "..".equals(segment)) && false)')],
+    ['replaced client', fixture.mainActivity + 'webView.setWebViewClient(new WebViewClient());'],
+    ['inverted interception', fixture.mainActivity.replace('return isAllowedAppUrl(url)', 'return !isAllowedAppUrl(url)')],
+  ]) {
+    assert.notEqual(mainActivity, fixture.mainActivity, name + ' mutation must apply');
+    const checks = computeStaticReleaseChecks({ ...fixture, mainActivity });
+    assert.equal(checks.privacy_security_static, 'FAIL', name);
+    assert.equal(checks.offline_static, 'FAIL', name);
+  }
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: "fetch(String.fromCharCode(104))" }).offline_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'globalThis["fe" + "tch"]("dynamic")' }).offline_static, "FAIL");
 });

@@ -615,7 +615,7 @@ test("package has no dependency or install surface", async () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
-  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "ci:receipt", "release:manifest", "start", "store-assets", "store-screenshot", "test", "test:browser", "verify:aab-repro", "verify:policy-url", "verify:release"]);
+  assert.deepEqual(Object.keys(pkg.scripts).sort(), ["android:aab", "android:evidence", "build", "ci:receipt", "release:manifest", "start", "store-assets", "store-screenshot", "test", "test:browser", "test:browser:orca", "verify:aab-repro", "verify:policy-url", "verify:release"]);
 });
 
 test("verify:release builds the AAB before manifest and Android evidence", async () => {
@@ -638,7 +638,7 @@ test("release checks are computed from source files and executed commands", asyn
   const fixture = {
     css: ".remove-button { min-width: 2.75rem; min-height: 2.75rem; }",
     androidManifest: "<manifest><application /></manifest>",
-    mainActivity: 'private static final String APP_ENTRY = "file:///android_asset/pwa/index.html"; view.loadUrl(APP_ENTRY);',
+    mainActivity: await read("android/app/src/main/java/com/learnershift/fridgemenu/MainActivity.java"),
     serviceWorker: 'const APP_SHELL = Object.freeze(["./index.html"]); cache.addAll(APP_SHELL);',
     adBoundary: "networkRequests: false; sdkLoaded: false; productionIdentifier: null;",
   };
@@ -653,6 +653,10 @@ test("release checks are computed from source files and executed commands", asyn
   assert.equal(computeStaticReleaseChecks({ ...fixture, serviceWorker: 'globalThis["fe" + "tch"]("dynamic")' }).offline_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadUrl(String.fromCharCode(104,116,116,112));` }).privacy_security_static, "FAIL");
   assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: `${fixture.mainActivity} view.loadDataWithBaseURL("dynamic", "", "text/html", "UTF-8", null);` }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: fixture.mainActivity.replace("appassets.androidplatform.net", "evil.example") }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: fixture.mainActivity.replace('"/assets/pwa/"', '"/assets/"') }).offline_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: fixture.mainActivity.replace(": emptyResponse()", ": null") }).privacy_security_static, "FAIL");
+  assert.equal(computeStaticReleaseChecks({ ...fixture, mainActivity: fixture.mainActivity.replace('!"https".equals(uri.getScheme())', '"https".equals(uri.getScheme())') }).privacy_security_static, "FAIL");
 });
 
 test("Android evidence generator binds computed release checks and identity to the current artifact", async () => {
@@ -724,7 +728,10 @@ test("release path is reproducible, signing-ready, privacy-preserving, and owner
   assert.match(gitignore, /\*\.keystore/);
   assert.match(manifest, /sha256/i);
   assert.match(manifest, /application_id:\s*"com\.learnershift\.fridgemenu"/);
-  assert.match(manifest, /version_code:\s*1/);
+  const gradleVersionCode = androidBuild.match(/versionCode\s*=\s*(\d+)/)?.[1];
+  const manifestVersionCode = manifest.match(/version_code:\s*(\d+)/)?.[1];
+  assert.equal(gradleVersionCode, "2", "release versionCode must be intentional");
+  assert.equal(manifestVersionCode, gradleVersionCode, "release manifest identity must match Gradle");
   assert.match(manifest, /version_name:\s*"1\.0\.0"/);
   assert.match(manifest, /computeReleaseChecks/);
   assert.doesNotMatch(manifest, /tests: "PASS"|build: "PASS"|accessibility: "PASS"|privacy_security: "PASS"|offline: "PASS"/);
@@ -808,7 +815,9 @@ test("owner handoff is fail-closed for unresolved declarations, approvals, testi
     priorIndex = gateIndex;
   }
   assert.match(handoff, /LOCAL_SIMULATION_ONLY[^.]*not current CI evidence/i);
-  assert.match(handoff, /run URL[^.]*Git SHA[^.]*AAB SHA-256[^.]*exact candidate/i);
+  assert.match(handoff, /run URL[^.]*Git SHA[^.]*AAB SHA-256[^.]*unsigned CI proof bundle/i);
+  assert.match(handoff, /Bind the signed candidate separately to the same clean Git SHA\/source tree/i);
+  assert.match(handoff, /signing changes the AAB digest/i);
   assert.match(qa, /internal-test upload approval[^.]*policy and signing predecessor receipt IDs/i);
   assert.doesNotMatch(qa, /internal-test upload approval[^.]*Health-resolution predecessor receipt IDs/i);
   assert.match(qa, /AAB SHA-256 when applicable/i);
@@ -913,7 +922,8 @@ test("Play feature graphic is a deterministic 1024 by 500 PNG", async () => {
 
 test("source tree and build output stay inside the release allowlists", async () => {
   const top = (await readdir(root)).sort();
-  assert.deepEqual(top.filter((name) => ![".git", ".hermes", "dist"].includes(name)), [
+  // Owner-required local work reports are optional and must never enter dist.
+  assert.deepEqual(top.filter((name) => ![".git", ".hermes", "dist", "reports"].includes(name)), [
     ".github", ".gitignore", "AGENTS.md", "README.md", "android", "app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "package.json", "privacy.html", "release", "scripts", "service-worker.js", "styles.css", "tests",
   ]);
   if (top.includes("dist")) assert.deepEqual((await readdir(resolve(root, "dist"))).sort(), ["app.js", "i18n.js", "icon-192.png", "icon-512.png", "icon.svg", "index.html", "manifest.webmanifest", "meal-engine.js", "privacy.html", "service-worker.js", "styles.css"]);

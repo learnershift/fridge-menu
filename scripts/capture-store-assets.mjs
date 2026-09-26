@@ -46,6 +46,11 @@ const localePasses = [
   { locale: "en", browserLocale: "en-US", filePrefix: "", state: seededState },
   { locale: "ko", browserLocale: "ko-KR", filePrefix: "ko-", state: seededStateKo },
 ];
+if (process.argv.includes("--orca")) {
+  if (!verifyDomOnly) throw new Error("Orca supports DOM verification only; use npm run test:browser:orca.");
+  await verifyWithOrca();
+  process.exit(0);
+}
 const candidates = [
   process.env.FRIDGE_MENU_CHROME_BIN,
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
@@ -96,6 +101,78 @@ async function stopChild(child) {
   await exited;
 }
 
+// Explicit local UX alternative. The standalone release/screenshot gate stays
+// unchanged, including its sandbox and mobile viewport requirements.
+async function verifyWithOrca() {
+  const worktree = `path:${root}`;
+  const command = (...args) => {
+    const execution = spawnSync("orca", [...args, "--json"], {
+      cwd: root, encoding: "utf8", timeout: 30000, maxBuffer: 1024 * 1024,
+    });
+    if (execution.error || execution.status !== 0) {
+      throw new Error(`Orca ${args[0]} failed: ${execution.error?.message || execution.stderr || execution.stdout}`);
+    }
+    const response = JSON.parse(execution.stdout);
+    if (response.ok !== true) throw new Error(`Orca ${args[0]} did not succeed.`);
+    return response.result;
+  };
+  const status = command("status");
+  const current = command("worktree", "current").worktree;
+  if (process.platform !== "linux" || status.target?.kind !== "local"
+      || status.runtime?.state !== "ready" || current?.path !== root
+      || current?.identity?.executionHostId !== "local") {
+    throw new Error("Orca UX verification requires the ready local Linux server runtime and this exact worktree.");
+  }
+  const { child, serverUrl } = await startLocalServer();
+  let page;
+  const evaluatePage = (expression) => {
+    // Refuse a redirected/reused origin before any test storage mutation.
+    const tab = command("tab", "show", "--page", page, "--worktree", worktree).tab;
+    if (new URL(tab.url).origin !== serverUrl) throw new Error("Orca test page left its dedicated local origin.");
+    return JSON.parse(command("eval", "--page", page, "--worktree", worktree, "--expression", expression).result);
+  };
+  try {
+    page = command("tab", "create", "--worktree", worktree, "--url", serverUrl).browserPageId;
+    if (typeof page !== "string" || !page) throw new Error("Orca did not return the new test page id.");
+    command("wait", "--page", page, "--worktree", worktree, "--url", serverUrl, "--timeout", "10000");
+    console.log(`ORCA_UX_CONTEXT platform=${process.platform} cwd=${root} url=${serverUrl} page=${page}`);
+    for (const pass of localePasses) {
+      evaluatePage(`(() => {
+        localStorage.removeItem("fridge-menu:v1");
+        localStorage.setItem("fridge-menu:locale:v1", ${JSON.stringify(pass.locale)});
+        return true;
+      })()`);
+      command("reload", "--page", page, "--worktree", worktree);
+      const verified = evaluatePage(uxVerificationExpression(pass));
+      if (verified?.chips !== 24 || verified?.menus !== 3 || verified?.badges !== 3) {
+        throw new Error(`Orca UX assertions did not return the expected ${pass.locale} result.`);
+      }
+      const { saved } = evaluatePage('({ saved: localStorage.getItem("fridge-menu:v1") })');
+      command("reload", "--page", page, "--worktree", worktree);
+      const restored = evaluatePage(`({
+        saved: localStorage.getItem("fridge-menu:v1"),
+        ingredients: document.querySelectorAll(".ingredient-item__name").length,
+        locale: document.documentElement.lang
+      })`);
+      if (restored.saved !== saved || restored.ingredients !== 3 || restored.locale !== pass.locale) {
+        throw new Error(`Orca ${pass.locale} persisted state did not survive reload.`);
+      }
+      console.log(`ORCA_UX_INTERACTION_OK locale=${pass.locale} chips=24 menus=3 badges=3 reload=PASS`);
+    }
+  } finally {
+    try {
+      if (page) {
+        // Clear only this test's random loopback origin; never another tab.
+        try { evaluatePage('(() => { localStorage.clear(); return true; })()'); }
+        catch { /* A failed cleanup must not hide the browser assertion failure. */ }
+        finally { command("tab", "close", "--page", page, "--worktree", worktree); }
+      }
+    } finally {
+      await stopChild(child);
+    }
+  }
+}
+
 let localServer;
 if (verifyDomOnly) {
   const started = await startLocalServer();
@@ -121,7 +198,11 @@ function devtoolsPort() {
       const match = stderr.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//);
       if (match) { clearTimeout(timeout); resolvePort(Number(match[1])); }
     });
-    browser.once("exit", (code) => { clearTimeout(timeout); reject(new Error(`Chrome exited before capture (${code}).`)); });
+    browser.once("exit", (code, signal) => {
+      clearTimeout(timeout);
+      const detail = stderr.split("\n").filter((line) => /FATAL|ERROR/.test(line)).slice(-3).join("\n");
+      reject(new Error(`Chrome exited before capture (code=${code} signal=${signal}).${detail ? `\n${detail}` : ""}`));
+    });
   });
 }
 
@@ -234,8 +315,15 @@ if (!verifyDomOnly) await mkdir(outputDir, { recursive: true });
 let socket;
 try {
   const port = await devtoolsPort();
-  const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-  socket = new WebSocket(pages.find((page) => page.type === "page").webSocketDebuggerUrl);
+  // Chrome may announce DevTools before the initial page target is listed.
+  let pageTarget;
+  for (let attempt = 0; attempt < 200 && !pageTarget; attempt += 1) {
+    const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+    pageTarget = pages.find((page) => page.type === "page");
+    if (!pageTarget) await new Promise((resolveWait) => setTimeout(resolveWait, 50));
+  }
+  if (!pageTarget) throw new Error("Chrome DevTools page target did not appear.");
+  socket = new WebSocket(pageTarget.webSocketDebuggerUrl);
   await new Promise((resolveOpen, reject) => { socket.addEventListener("open", resolveOpen, { once: true }); socket.addEventListener("error", reject, { once: true }); });
   const protocol = cdp(socket);
   await protocol.call("Page.enable");

@@ -12,6 +12,7 @@
     "release:manifest": "node scripts/release-manifest.mjs",
     "test": "node --test tests/*.test.js",
     "test:browser": "node scripts/capture-store-assets.mjs --verify-dom-only",
+    "test:browser:orca": "node scripts/capture-store-assets.mjs --verify-dom-only --orca",
     "store-assets": "node scripts/generate-store-assets.mjs",
     "verify:aab-repro": "node scripts/verify-aab-repro.mjs",
     "verify:policy-url": "node scripts/verify-policy-url.mjs",

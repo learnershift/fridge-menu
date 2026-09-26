@@ -29,13 +29,80 @@ function hasExactTouchTarget(css) {
     maximums.every((value) => value === "none") && !/(?:transform|zoom)\s*:/.test(block);
 }
 
+// Deliberately pin the reviewed routing bodies. This is a narrow source regression
+// gate, not Java analysis or Android runtime security evidence. Routing changes
+// require review of these bodies and the mutation tests before updating them.
+function hasReviewedAssetRouting(mainActivity) {
+  const compact = (source) => source.replace(/\s+/g, "");
+  const expectedClient = String.raw`webView.setWebViewClient(new WebViewClient() {
+      @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+        return !isAllowedAppUrl(request.getUrl().toString());
+      }
+
+      @Override @SuppressWarnings("deprecation") public boolean shouldOverrideUrlLoading(WebView view, String url) {
+        return !isAllowedAppUrl(url);
+      }
+
+      @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+        return isAllowedAppUrl(request.getUrl().toString())
+            ? assetLoader.shouldInterceptRequest(request.getUrl())
+            : emptyResponse();
+      }
+
+      @Override @SuppressWarnings("deprecation") public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+        return isAllowedAppUrl(url)
+            ? assetLoader.shouldInterceptRequest(Uri.parse(url))
+            : emptyResponse();
+      }
+
+      @Override public void onPageFinished(WebView view, String url) {
+        syncBackCallback();
+      }
+    });`;
+  const expectedGuards = String.raw`private static boolean isAllowedAppUrl(String rawUrl) {
+    try {
+      Uri uri = Uri.parse(rawUrl);
+      if (!"https".equals(uri.getScheme()) || !APP_HOST.equals(uri.getAuthority())) return false;
+      String encodedPath = uri.getEncodedPath();
+      if (encodedPath == null || encodedPath.indexOf('%') >= 0) return false;
+      String path = Uri.decode(encodedPath);
+      if (!path.startsWith(APP_PATH) || path.indexOf('\\') >= 0 || path.indexOf('%') >= 0) return false;
+      for (String segment : path.substring(APP_PATH.length()).split("/")) {
+        if (".".equals(segment) || "..".equals(segment)) return false;
+      }
+      return true;
+    } catch (RuntimeException ignored) {
+      return false;
+    }
+  }
+
+  private static WebResourceResponse emptyResponse() {
+    return new WebResourceResponse(
+        "text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
+  }`;
+  const source = compact(mainActivity);
+  return (mainActivity.match(/\.setWebViewClient\s*\(/g) || []).length === 1 &&
+    (mainActivity.match(/private static boolean isAllowedAppUrl\s*\(/g) || []).length === 1 &&
+    source.includes(compact(expectedClient)) && source.includes(compact(expectedGuards));
+}
+
 function hasOnlyAllowedWebViewEntry(mainActivity) {
+  const withoutAllowedOrigin = mainActivity.replace(
+    /private static final String APP_ORIGIN = "https:"\s*\+\s*"\/\/"\s*\+\s*APP_HOST\s*;/g,
+    "",
+  );
   const withoutAllowedEntry = mainActivity.replace(/\b\w+\.loadUrl\s*\(\s*APP_ENTRY\s*\)\s*;/g, "");
-  return /private static final String APP_ENTRY = "file:\/\/\/android_asset\/pwa\/index\.html";/.test(mainActivity) &&
+  return /private static final String APP_HOST = "appassets\.androidplatform\.net";/.test(mainActivity) &&
+    /private static final String APP_ORIGIN = "https:"\s*\+\s*"\/\/"\s*\+\s*APP_HOST;/.test(mainActivity) &&
+    /private static final String APP_PATH = "\/assets\/pwa\/";/.test(mainActivity) &&
+    /private static final String APP_ENTRY = APP_ORIGIN\s*\+\s*APP_PATH\s*\+\s*"index\.html";/.test(mainActivity) &&
+    /\.addPathHandler\s*\(\s*"\/assets\/"\s*,\s*new WebViewAssetLoader\.AssetsPathHandler\s*\(\s*this\s*\)\s*\)/.test(mainActivity) &&
     !/\.loadUrl\s*\(/.test(withoutAllowedEntry) &&
     !/\.(?:loadData|loadDataWithBaseURL|postUrl|evaluateJavascript)\s*\(/.test(mainActivity) &&
     !/\b(?:HttpURLConnection|Socket|WebSocket|OkHttp|URLConnection|Uri\.Builder|Class\.forName|java\.lang\.reflect)\b/.test(mainActivity) &&
-    !/\b(?:getMethod|getDeclaredMethod|getMethods|getDeclaredMethods)\s*\(|\.\s*invoke\s*\(/.test(mainActivity);
+    !/\b(?:getMethod|getDeclaredMethod|getMethods|getDeclaredMethods)\s*\(|\.\s*invoke\s*\(/.test(mainActivity) &&
+    !hasRemoteReference(withoutAllowedOrigin) &&
+    hasReviewedAssetRouting(mainActivity);
 }
 
 function hasOnlyAllowedServiceWorkerFetch(serviceWorker) {
@@ -57,10 +124,10 @@ function hasRelativeAppShell(serviceWorker) {
 export function computeStaticReleaseChecks({ css, androidManifest, mainActivity, serviceWorker }) {
   return {
     touch_target_static: pass(hasExactTouchTarget(css)),
-    privacy_security_static: pass(!/uses-permission/i.test(androidManifest) && !hasRemoteReference(mainActivity) &&
+    privacy_security_static: pass(!/uses-permission/i.test(androidManifest) &&
       !/addJavascriptInterface/.test(mainActivity) && hasOnlyAllowedWebViewEntry(mainActivity)),
     offline_static: pass(!hasRemoteReference(serviceWorker) && hasOnlyAllowedServiceWorkerFetch(serviceWorker) && hasRelativeAppShell(serviceWorker) &&
-      /file:\/\/\/android_asset\/pwa\/index\.html/.test(mainActivity)),
+      hasOnlyAllowedWebViewEntry(mainActivity)),
   };
 }
 
