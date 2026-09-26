@@ -633,6 +633,11 @@ test("verify:release builds the AAB before manifest and Android evidence", async
   assert.ok(aab < steps.indexOf("npm run android:evidence"));
 });
 
+test("CI Android setup skips the removed legacy tools package", async () => {
+  const workflow = await read(".github/workflows/release-readiness.yml");
+  assert.match(workflow, /uses: android-actions\/setup-android@[0-9a-f]{40}\n\s+with:\n\s+packages: platform-tools\b/);
+});
+
 test("release checks are computed from source files and executed commands", async () => {
   const { computeStaticReleaseChecks } = await import("../scripts/release-checks.mjs");
   const fixture = {
